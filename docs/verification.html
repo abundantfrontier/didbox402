@@ -21,8 +21,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             border-top: 8px solid #007aff;
         }
-        /* The "Console" Theme - Force High Contrast */
-        pre, .assertion, .mitigation, .scaling-box { 
+        pre, .assertion { 
             background: #1e1e1e !important; 
             color: #4ec9b0 !important; 
             padding: 20px; 
@@ -30,26 +29,17 @@
             overflow-x: auto; 
             font-size: 0.9rem;
             border: 1px solid #000;
-            font-family: 'SFMono-Regular', Consolas, monospace !important;
+            font-family: 'SFMono-Regular', Consolas, monospace;
             margin: 20px 0;
             display: block;
         }
-        /* Ensure ALL nested code tags in dark blocks are transparent */
-        pre code, .assertion code, .mitigation code, .scaling-box code {
-            background: transparent !important;
-            color: inherit !important;
-            padding: 0 !important;
-            border: none !important;
-        }
-        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        
+        pre code, .assertion code { background: transparent !important; color: inherit !important; padding: 0 !important; }
         h1 { color: #000; margin-top: 0; }
         h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
         .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
         .test-case { margin-bottom: 40px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
         .test-case:last-child { border-bottom: none; }
         .test-case h3 { color: #1e7e34; margin-bottom: 10px; }
-        .optional h3 { color: #856404; }
     </style>
 </head>
 <body>
@@ -61,80 +51,37 @@
         <h2>Mandatory Core Tests</h2>
 
         <div class="test-case">
-            <h3>1. Economic Integrity (Pricing)</h3>
-            <p><strong>Goal:</strong> Ensure the server calculates pricing exactly as specified in the formula, refusing service without payment.</p>
-            <p><strong>Verification:</strong> Send a <code>POST /store</code> request with a known size and duration but omit the <code>X-Payment</code> header.</p>
-<pre><code>POST /store HTTP/1.1
-X-DID: did:key:z6Mkp...
-X-DID-Signature: mock_sig
-
-{
-  "ciphertext": "hello world",
-  "durationHours": 1
-}</code></pre>
-            <p><strong>Expected Response:</strong></p>
-<pre><code>HTTP/1.1 402 Payment Required
-{
-  "error": "Payment Required",
-  "amount_satoshis": 100
-}</code></pre>
-            <div class="assertion">EXPECT(resp.amount_satoshis).TO_EQUAL(Math.ceil((size_mb * duration_hours) * base_rate))</div>
+            <h3>1. Economic Integrity</h3>
+            <p>Verification: POST /store without payment must reject with 402 and the correct Satoshi amount.</p>
+            <div class="assertion">EXPECT(resp.status).TO_EQUAL(402)<br>EXPECT(resp.amount_satoshis).TO_EQUAL(Math.ceil(size_mb * duration * rate))</div>
         </div>
 
         <div class="test-case">
-            <h3>2. Cryptographic Isolation (Inboxes)</h3>
-            <p><strong>Goal:</strong> Prove that knowing one inbox alias reveals nothing about another, even for the same DID.</p>
-            <p><strong>Verification:</strong> Store an item in <code>alias-a</code>. Then, query <code>GET /inbox/alias-b</code>.</p>
-<pre><code>GET /inbox/alias-b HTTP/1.1
-X-DID: did:key:z6Mkp...
-X-DID-Signature: mock_sig</code></pre>
-            <p><strong>Expected Response:</strong></p>
-<pre><code>HTTP/1.1 200 OK
-{
-  "alias": "alias-b",
-  "items": []
-}</code></pre>
+            <h3>2. Cryptographic Isolation</h3>
+            <p>Verification: Querying a named inbox for data stored in a different alias must return empty results.</p>
             <div class="assertion">EXPECT(GET("/inbox/alias-b").items).TO_BE_EMPTY()</div>
         </div>
 
         <div class="test-case">
-            <h3>3. Temporal Persistence (Expiration)</h3>
-            <p><strong>Goal:</strong> Confirm that data is unreachable precisely after the leased time expires.</p>
-            <p><strong>Verification:</strong> Store an item with <code>durationHours: -1</code> (or wait for natural expiration). Attempt <code>GET /retrieve/{id}</code>.</p>
-<pre><code>GET /retrieve/uuid-1234 HTTP/1.1
-X-DID: did:key:z6Mkp...
-X-DID-Signature: mock_sig</code></pre>
-            <p><strong>Expected Response:</strong></p>
-<pre><code>HTTP/1.1 410 Gone
-{
-  "error": "Expired"
-}</code></pre>
-            <div class="assertion">EXPECT(GET("/retrieve/id").status).TO_EQUAL(410)</div>
+            <h3>3. Sovereign Access</h3>
+            <p>Verification: Only the owner or recipient (scoped by alias) can retrieve the ciphertext.</p>
+            <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID": "wrong-did"}).status).TO_EQUAL(403)</div>
         </div>
 
         <div class="test-case">
-            <h3>4. Sovereign Access (Authorization)</h3>
-            <p><strong>Goal:</strong> Ensure only the owner or intended recipient can retrieve data.</p>
-            <p><strong>Verification:</strong> Attempt to retrieve an object using a DID that is neither the owner nor the recipient.</p>
-<pre><code>GET /retrieve/uuid-1234 HTTP/1.1
-X-DID: did:key:zEvil...
-X-DID-Signature: evil_sig</code></pre>
-            <p><strong>Expected Response:</strong></p>
-<pre><code>HTTP/1.1 403 Forbidden
-{
-  "error": "Unauthorized"
-}</code></pre>
-            <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID": "evil-did"}).status).TO_EQUAL(403)</div>
+            <h3>4. Replay Protection</h3>
+            <p>Verification: Modifying the request body after signing must invalidate the request.</p>
+            <div class="assertion">EXPECT(res.status).TO_EQUAL(401) // Signature Binding Mismatch</div>
         </div>
 
-        <h2>Running the Reference Suite</h2>
-        <p>The <code>didbox402</code> repository includes a complete reference test suite implementing the mandatory core checks.</p>
-
+        <h2>Reference Conformance Suite</h2>
+        <p>The <code>didbox402</code> repository includes an automated test suite that enforces these rules. It also provides a <strong>Client Library</strong> that implements the correct signature binding and payment flows.</p>
+        
         <div class="assertion">
-            # The reference suite is located at:<br>
-            <strong>src/__tests__/index.test.ts</strong><br><br>
-            # Run all conformance tests locally:<br>
-            npm test
+            # Run automated conformance tests<br>
+            npm test<br><br>
+            # Verify integration using the client library<br>
+            npx ts-node scripts/demo.ts
         </div>
     </div>
 </body>

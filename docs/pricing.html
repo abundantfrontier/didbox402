@@ -24,7 +24,7 @@
         <p>Storage on the edge is a finite resource. didbox402 uses a predictable pricing model to ensure the service pays for its own infrastructure while remaining accessible.</p>
 
         <h2>Pricing Formula</h2>
-        <p>The cost is calculated based on volume (bytes) and duration (hours), with a 1MB minimum charge.</p>
+        <p>The cost is calculated based on volume (bytes) and duration (hours), with a <strong>1MB minimum charge</strong> to cover indexing and D1 overhead.</p>
         
         <div class="math">
             Total Cost = Math.max(1MB, Size) * Hours * Base_Rate
@@ -42,7 +42,7 @@
         </div>
 
         <h2>Payment Specification</h2>
-        <p>didbox402 nodes act as <strong>Lightning Service Providers</strong>. The payment flow follows the 402 standard:</p>
+        <p>didbox402 nodes act as <strong>Lightning Service Providers (LSPs)</strong>. The payment flow follows the 402 standard:</p>
         
         <ol>
             <li><strong>Discovery:</strong> Client sends a request without a payment header.</li>
