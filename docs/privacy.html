@@ -28,29 +28,33 @@
         <p>Even if the payload is encrypted, <strong>metadata is a signal</strong>. Knowing who is talking to whom is often enough to compromise agent security.</p>
 
         <div class="privacy-box">
-            <strong>The Problem:</strong> If we store <code>recipient_did</code> as a string, any administrator can see the entire communication graph.
+            <strong>The Problem:</strong> If we store <code>recipient_did</code> or <code>owner_did</code> as a string, any administrator can see the entire communication graph.
         </div>
 
-        <h2>The Solution: Salted DID Hashing</h2>
-        <p>Instead of searching by raw DID, the server uses a salted hash to identify owners and inboxes.</p>
+        <h2>The Solution: Absolute Pseudonymity</h2>
+        <p>didbox402 v0.3.0 mandates that <strong>no raw DIDs</strong> are stored in lookup indexes. All identifiers (owners and recipients) are converted to salted hashes.</p>
         
         <pre>Identity_Hash = SHA256(Recipient_DID + Alias + Service_Salt)</pre>
 
         <ul>
-            <li><strong>Recipient_DID:</strong> The public identifier of the recipient.</li>
+            <li><strong>Recipient_DID:</strong> The public identifier (Multibase Ed25519).</li>
             <li><strong>Alias:</strong> The specific inbox (defaults to <code>"default"</code>).</li>
-            <li><strong>Service_Salt:</strong> A secret key known only to the didbox402 instance.</li>
+            <li><strong>Service_Salt:</strong> A secret key known only to the node operator.</li>
         </ul>
 
-        <h2>Pseudonymity Properties</h2>
-        <ol>
-            <li>The server doesn't know who the recipient is (unless they already have the DID and salt to test against).</li>
-            <li>Recipients check their inboxes by providing their DID. The server computes the hash and returns matches.</li>
-            <li>Observers cannot link different storage boxes to the same recipient without knowing the salt and alias combinations.</li>
-        </ol>
+        <h2>Metadata Retention (D1 Schema)</h2>
+        <p>The database only retains the following fields:</p>
+        <ul>
+            <li><code>storage_id</code>: UUID-v4.</li>
+            <li><code>owner_hash</code>: Salted hash of the uploader.</li>
+            <li><code>recipient_hash</code>: Salted hash of the intended recipient.</li>
+            <li><code>size_bytes</code>: Payload size.</li>
+            <li><code>expires_at</code>: Expiration timestamp.</li>
+        </ul>
 
-        <h2>Metadata Retention</h2>
-        <p>The D1 database only retains: <code>storage_id</code>, <code>owner_hash</code>, <code>recipient_hash</code>, <code>size_bytes</code>, and <code>expires_at</code>.</p>
+        <div style="background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 8px; margin-top: 20px; color: #1e7e34; font-weight: bold;">
+            v0.3.0 Update: The <code>inboxes</code> table has been refactored to use <code>owner_hash</code> instead of raw DIDs, closing the final metadata leakage vector.
+        </div>
     </div>
 </body>
 </html>

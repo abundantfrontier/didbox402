@@ -32,7 +32,7 @@
     <div class="container">
         <a href="index.html" class="back-link">← Back to Index</a>
         <h1>The Proof: Verification & Conformance <span style="font-size: 0.5em; opacity: 0.7;">v0.3.0</span></h1>
-        <p>A protocol is only as good as its verification. This document defines the conformance test cases that any <code>didbox402</code> implementation must pass to be considered compliant.</p>
+        <p>A protocol is only as good as its verification. Version v0.3.0 introduces the <strong>Testing Gauntlet</strong>: a suite of 18 automated tests verifying security, privacy, and economic compliance.</p>
 
         <h2>Mandatory Core Tests</h2>
 
@@ -50,30 +50,40 @@
 
         <div class="test-case">
             <h3>3. Sovereign Access</h3>
-            <p>Verification: Only the owner or recipient (scoped by alias) can retrieve the ciphertext.</p>
+            <p>Verification: Only the owner or recipient (scoped by alias) can retrieve the ciphertext. Evil DIDs are blocked.</p>
             <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID": "wrong-did"}).status).TO_EQUAL(403)</div>
         </div>
 
         <div class="test-case">
-            <h3>4. Replay Protection (X-DID-Timestamp)</h3>
-            <p>Verification: Modifying the request body after signing, or reusing an old timestamp, must invalidate the request.</p>
-            <div class="assertion">EXPECT(res.status).TO_EQUAL(401) // Signature Binding Mismatch</div>
+            <h3>4. Replay Protection (Nonce Tracking)</h3>
+            <p>Verification: Re-using a valid signature with the same timestamp must be rejected immediately.</p>
+            <div class="assertion">EXPECT(res2.status).TO_EQUAL(401) // Signature Already Used</div>
         </div>
 
         <div class="test-case">
             <h3>5. Temporal Security (Drift Window)</h3>
             <p>Verification: Requests with an <code>X-DID-Timestamp</code> more than 5 minutes in the past or future must be rejected.</p>
-            <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID-Timestamp": now - 600}).status).TO_EQUAL(401) // Clock Drift Rejected</div>
+            <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID-Timestamp": now - 301000}).status).TO_EQUAL(401) // 5m 1s Drift Rejected</div>
+        </div>
+
+        <div class="test-case">
+            <h3>6. Privacy Invariant</h3>
+            <p>Verification: Prove that raw DIDs are never stored in the database.</p>
+            <div class="assertion">EXPECT(DB_QUERY("SELECT * FROM storage_records")).NOT.TO_CONTAIN(MY_RAW_DID)</div>
         </div>
 
         <h2>Reference Conformance Suite</h2>
-        <p>The <code>didbox402</code> repository includes an automated test suite that enforces these rules. It also provides a <strong>Client Library</strong> that implements the correct signature binding and payment flows.</p>
+        <p>The <code>didbox402</code> repository includes <strong>18 automated tests</strong> across four modular files:</p>
+        <ul>
+            <li><code>auth.test.ts</code>: Headers, Multibase parsing, Drift windows, and Janitor security.</li>
+            <li><code>storage.test.ts</code>: Store/Retrieve flow, Nonce tracking, and Privacy invariants.</li>
+            <li><code>inboxes.test.ts</code>: Alias creation, listing, and isolation.</li>
+            <li><code>index.test.ts</code>: Economic handshake and 402 challenge cycles.</li>
+        </ul>
         
         <div class="assertion">
-            # Run automated conformance tests<br>
-            npm test<br><br>
-            # Verify integration using the client library<br>
-            npx ts-node scripts/demo.ts
+            # Run the complete testing gauntlet<br>
+            npm test --workspaces
         </div>
     </div>
 </body>

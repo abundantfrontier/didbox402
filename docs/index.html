@@ -74,13 +74,9 @@
 
         <div class="edge-note">
             <strong>The Human "Boil-Up":</strong>
-            didbox402 isn't just a database. It's a <strong>vending machine for privacy</strong>. Agents pay for exactly what they use, for exactly how long they need it, and they prove who they are with DIDs. No accounts, no credit cards, just code-to-code commerce.
+            didbox402 isn't just a database. It's a <strong>vending machine for privacy</strong>. Agents pay for exactly what they use, for exactly how long they need it, and they prove who they are with DIDs.
             <br><br>
-            <strong>Temporal Security:</strong> Version v0.3.0 introduces mandatory <strong>Replay Protection (X-DID-Timestamp)</strong> to ensure requests cannot be intercepted and re-used by malicious actors.
-        </div>
-
-        <div class="server-tip">
-            <strong>Viewing Tip:</strong> If links are blocked locally, run <code>python3 -m http.server 8080 --directory docs</code> and open <code>http://localhost:8080</code>.
+            <strong>Temporal Hardening:</strong> v0.3.0 implements mandatory <strong>Replay Protection (Nonce Tracking)</strong> and standard <strong>Multibase DID Parsing</strong>.
         </div>
 
         <section class="prototype-box">
@@ -88,8 +84,8 @@
             <p>Ready to build? Use the following resources to integrate with the protocol:</p>
             <ul>
                 <li><strong><a href="../PROTOCOL.md">Formal Protocol Specification (v0.3.0)</a></strong></li>
-                <li><code>src/index.ts</code>: The Hono Edge Server (Reference Node).</li>
-                <li><code>src/client-lib.ts</code>: TypeScript Client Library for Agents.</li>
+                <li><code>packages/server/src/index.ts</code>: The Hono Edge Server (Reference Node).</li>
+                <li><code>packages/sdk-core/src/index.ts</code>: TypeScript Client Library for Agents.</li>
                 <li><code>scripts/demo.ts</code>: End-to-end integration demo.</li>
             </ul>
         </section>

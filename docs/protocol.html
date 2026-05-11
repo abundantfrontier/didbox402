@@ -32,7 +32,7 @@
             Formal Specification: <a href="../PROTOCOL.md">PROTOCOL.md (v0.3.0)</a>
         </div>
 
-        <p>Interaction with didbox402 is stateless and authenticated via HTTP headers. No session cookies or JWTs are used.</p>
+        <p>Interaction with didbox402 is stateless and authenticated via DID-signed HTTP headers.</p>
 
         <h2>Required Headers</h2>
         <table class="spec-table">
@@ -46,18 +46,18 @@
             <tbody>
                 <tr>
                     <td><code>X-DID</code></td>
-                    <td>The DID of the caller.</td>
-                    <td><code>did:key:z6MkpTHR...</code></td>
+                    <td>Multibase <strong>Ed25519 did:key</strong> identifier.</td>
+                    <td><code>did:key:z6Mkp...</code></td>
                 </tr>
                 <tr>
                     <td><code>X-DID-Signature</code></td>
-                    <td>A signature of the request payload or a nonce.</td>
-                    <td><code>base64(...)</code></td>
+                    <td>Hex-encoded Ed25519 signature of the request hash.</td>
+                    <td><code>abcd123...</code></td>
                 </tr>
                 <tr>
                     <td><code>X-DID-Timestamp</code></td>
-                    <td>Unix timestamp (UTC) for <strong>Replay Protection</strong>. Must be within drift window (±5m).</td>
-                    <td><code>1715000000</code></td>
+                    <td>Unix Epoch in <strong>milliseconds</strong> (UTC). Drift window: ±5m.</td>
+                    <td><code>1715436000000</code></td>
                 </tr>
                 <tr>
                     <td><code>X-Payment</code></td>
@@ -72,20 +72,18 @@
             </tbody>
         </table>
 
-        <h2>Retrieval Flow (Access Control)</h2>
-        <p>When a client calls <code>GET /retrieve/{id}</code>, the server performs the following checks:</p>
-        <ol>
-            <li>Verify <code>X-DID-Signature</code> matches <code>X-DID</code>.</li>
-            <li>Lookup <code>id</code> in metadata. Check if <code>expires_at</code> is in the future.</li>
-            <li>Compare caller's identity (optionally scoped by <code>X-Inbox-Alias</code>) against the record's <code>owner_hash</code> or <code>recipient_hash</code>.</li>
-            <li>If authorized, stream the blob from storage.</li>
-        </ol>
+        <h2>Replay Protection (Nonce Tracking)</h2>
+        <p>didbox402 implements mandatory <strong>Nonce Tracking</strong>. The server caches every <code>X-DID-Signature</code> within the 5-minute window. Any attempt to re-use a valid signature will be rejected with <code>401 Unauthorized</code>.</p>
 
         <h2>Signature Binding</h2>
-        <p>To prevent replay and tampering, the <code>X-DID-Signature</code> MUST cover the <strong>Request Hash</strong>: <code>Hash(Method + Path + Timestamp + Body_Hash)</code>. The server rejects any request where the <code>X-DID-Timestamp</code> is outside the allowed drift window.</p>
+        <p>To prevent tampering, the signature MUST cover the <strong>Temporal Request Hash</strong>:</p>
+        <pre><code>Hash = SHA256(Timestamp + Method + Path + SHA256(Raw_Body))</code></pre>
         
-        <pre><code>// Signature Binding logic used in client-lib.ts:
-const signature = await sign(`${method}${path}${timestamp}${body}`);</code></pre>
+        <p>In the reference SDK, this is generated as follows:</p>
+        <pre><code>const signature = await ed.sign(
+  sha256(`${timestamp}${method}${path}${bodyHash}`),
+  privateKey
+);</code></pre>
     </div>
 </body>
 </html>
