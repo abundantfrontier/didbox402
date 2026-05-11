@@ -1,6 +1,6 @@
 {
   "name": "@didbox/server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "scripts": {
     "dev": "wrangler dev src/index.ts",
     "deploy": "wrangler deploy --minify src/index.ts",
@@ -9,10 +9,12 @@
   "dependencies": {
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
+    "bs58": "^6.0.0",
     "hono": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.4.0",
-    "@cloudflare/workers-types": "^4.20240502.0"
+    "@cloudflare/workers-types": "^4.20240502.0",
+    "@types/bs58": "^4.0.4"
   }
 }

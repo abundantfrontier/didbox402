@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 | Protocol Spec</title>
+    <title>didbox402 (v0.3.0) | Protocol Spec</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -26,10 +26,10 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Handshake: Protocol Spec</h1>
+        <h1>The Handshake: Protocol Spec <span style="font-size: 0.5em; opacity: 0.7;">v0.3.0</span></h1>
 
         <div class="anchor-box">
-            Formal Specification: <a href="../PROTOCOL.md">PROTOCOL.md (v0.2.0)</a>
+            Formal Specification: <a href="../PROTOCOL.md">PROTOCOL.md (v0.3.0)</a>
         </div>
 
         <p>Interaction with didbox402 is stateless and authenticated via HTTP headers. No session cookies or JWTs are used.</p>
@@ -55,6 +55,11 @@
                     <td><code>base64(...)</code></td>
                 </tr>
                 <tr>
+                    <td><code>X-DID-Timestamp</code></td>
+                    <td>Unix timestamp (UTC) for <strong>Replay Protection</strong>. Must be within drift window (±5m).</td>
+                    <td><code>1715000000</code></td>
+                </tr>
+                <tr>
                     <td><code>X-Payment</code></td>
                     <td>The x402 payment proof (preimage).</td>
                     <td><code>preimage:...</code></td>
@@ -77,10 +82,10 @@
         </ol>
 
         <h2>Signature Binding</h2>
-        <p>To prevent replay and tampering, the <code>X-DID-Signature</code> MUST cover the <strong>Request Hash</strong>: <code>Hash(Method + Path + Body_Hash)</code>.</p>
+        <p>To prevent replay and tampering, the <code>X-DID-Signature</code> MUST cover the <strong>Request Hash</strong>: <code>Hash(Method + Path + Timestamp + Body_Hash)</code>. The server rejects any request where the <code>X-DID-Timestamp</code> is outside the allowed drift window.</p>
         
         <pre><code>// Signature Binding logic used in client-lib.ts:
-const signature = await sign(`${method}${path}${body}`);</code></pre>
+const signature = await sign(`${method}${path}${timestamp}${body}`);</code></pre>
     </div>
 </body>
 </html>

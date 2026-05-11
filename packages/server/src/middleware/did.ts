@@ -2,6 +2,7 @@ import { Context, Next } from 'hono';
 import * as ed from '@noble/ed25519';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { sha512 } from '@noble/hashes/sha2.js';
+import bs58 from 'bs58';
 
 // noble-ed25519 v3+ requires SHA-512 to be set manually
 ed.hashes.sha512 = (msg: Uint8Array) => sha512(msg);
@@ -16,53 +17,62 @@ export async function hashDid(did: string, salt: string): Promise<string> {
 }
 
 /**
- * Extract the Ed25519 public key from a did:key string.
- * Example: did:key:z6Mk...
+ * Extract the Ed25519 public key from a standard did:key string.
  */
 function extractPublicKeyFromDid(did: string): Uint8Array {
-  if (!did.startsWith('did:key:z6Mk')) {
-    throw new Error('Only Ed25519 (did:key:z6Mk) is supported in v0.2.0');
+  if (!did.startsWith('did:key:z')) {
+    throw new Error('Only base58btc multibase (did:key:z...) is supported');
   }
-  // In a real did:key implementation, we would use a multibase/multicodec decoder.
-  // For the MVP, we assume the DID is the multibase-encoded public key.
-  // This is a simplified version.
-  return Buffer.from(did.substring(12), 'base64'); // Placeholder logic
+  
+  const multibase = did.substring(9);
+  const decoded = bs58.decode(multibase);
+  
+  // Ed25519 multicodec is 0xed, 0x01
+  if (decoded[0] !== 0xed || decoded[1] !== 0x01) {
+    throw new Error('Only Ed25519 (did:key:z6Mk) is supported');
+  }
+  
+  return decoded.slice(2);
 }
 
 /**
  * Middleware to verify the DID signature.
- * Enforces signature binding: Hash(Method + Path + Body_Hash)
+ * Enforces signature binding: Hash(Timestamp + Method + Path + Body_Hash)
  */
 export async function verifyDidSignature(c: Context, next: Next) {
   const did = c.req.header('X-DID');
   const signature = c.req.header('X-DID-Signature');
+  const timestampHeader = c.req.header('X-DID-Timestamp');
 
-  if (!did || !signature) {
-    return c.json({ error: 'Missing X-DID or X-DID-Signature' }, 401);
+  if (!did || !signature || !timestampHeader) {
+    return c.json({ error: 'Missing X-DID, X-DID-Signature, or X-DID-Timestamp' }, 401);
+  }
+
+  // 5-minute drift window
+  const timestamp = parseInt(timestampHeader);
+  const now = Date.now();
+  if (Math.abs(now - timestamp) > 5 * 60 * 1000) {
+    return c.json({ error: 'X-DID-Timestamp outside allowed window' }, 401);
   }
 
   try {
     const publicKey = extractPublicKeyFromDid(did);
-    
+
     // Compute the Request Hash for Signature Binding
     const method = c.req.method;
     const path = new URL(c.req.url).pathname;
     const bodyText = await c.req.text();
-    
-    // We must clone the request or re-provide the body for later handlers
-    // since we consumed c.req.text()
-    // However, in Cloudflare Workers / Hono, consuming the body can be tricky.
-    // Let's use a more robust way to handle the body.
-    
+
     const bodyHash = sha256(new TextEncoder().encode(bodyText));
-    const requestHash = sha256(new TextEncoder().encode(`${method}${path}${Buffer.from(bodyHash).toString('hex')}`));
+    const requestHash = sha256(new TextEncoder().encode(`${timestamp}${method}${path}${Buffer.from(bodyHash).toString('hex')}`));
 
     const sigBytes = signature === 'mock_sig' ? new Uint8Array(64) : Buffer.from(signature, 'hex');
     const isValid = await ed.verify(sigBytes, requestHash, publicKey);
-    
+
     if (!isValid && signature !== 'mock_sig') { 
       return c.json({ error: 'Invalid DID Signature' }, 401);
     }
+
 
     c.set('did', did);
     c.set('bodyText', bodyText); // Pass body through to avoid re-parsing

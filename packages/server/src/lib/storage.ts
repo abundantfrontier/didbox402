@@ -8,7 +8,7 @@ export interface StorageRecord {
 }
 
 export interface InboxRecord {
-  owner_did: string;
+  owner_hash: string;
   alias: string;
   hashed_id: string;
   created_at: string;
@@ -33,16 +33,16 @@ export async function saveStorageRecord(db: D1Database, record: StorageRecord) {
 export async function saveInbox(db: D1Database, inbox: InboxRecord) {
   return db
     .prepare(
-      "INSERT INTO inboxes (owner_did, alias, hashed_id, created_at) VALUES (?, ?, ?, ?)"
+      "INSERT INTO inboxes (owner_hash, alias, hashed_id, created_at) VALUES (?, ?, ?, ?)"
     )
-    .bind(inbox.owner_did, inbox.alias, inbox.hashed_id, inbox.created_at)
+    .bind(inbox.owner_hash, inbox.alias, inbox.hashed_id, inbox.created_at)
     .run();
 }
 
-export async function getInboxes(db: D1Database, ownerDid: string): Promise<InboxRecord[]> {
+export async function getInboxes(db: D1Database, ownerHash: string): Promise<InboxRecord[]> {
   const { results } = await db
-    .prepare("SELECT * FROM inboxes WHERE owner_did = ?")
-    .bind(ownerDid)
+    .prepare("SELECT * FROM inboxes WHERE owner_hash = ?")
+    .bind(ownerHash)
     .all();
   return results as unknown as InboxRecord[];
 }

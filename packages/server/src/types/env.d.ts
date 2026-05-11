@@ -6,4 +6,5 @@ export interface Env {
   EGRESS_RATE_PER_MB: string;     // Satoshis
   INBOX_CREATION_FEE: string;    // Satoshis
   DEV_MODE: string;              // "true" or "false"
+  ADMIN_TOKEN: string;           // Secret for Janitor
 }

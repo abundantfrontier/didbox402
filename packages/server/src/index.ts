@@ -61,23 +61,25 @@ app.get('/price', async (c) => {
     min_charge_mb: 1
   });
 });
-
 /**
  * POST /inboxes
+ * Creates a named inbox for the authenticated DID.
  */
 app.post('/inboxes', async (c) => {
   const { alias } = await getJsonBody(c);
   const did = c.get('did');
+  const ownerHash = c.get('hashedDid');
   const salt = c.env.SERVICE_SALT || 'default_salt';
+
   const hashedId = await hashDid(did + (alias || 'default'), salt);
-  
+
   const creationFee = parseInt(c.env.INBOX_CREATION_FEE || '1000');
   if (!verifyPayment(c, creationFee)) {
     return challenge402(c, creationFee);
   }
 
   await saveInbox(c.env.DB, {
-    owner_did: did,
+    owner_hash: ownerHash,
     alias: alias || 'default',
     hashed_id: hashedId,
     created_at: new Date().toISOString(),
@@ -88,10 +90,11 @@ app.post('/inboxes', async (c) => {
 
 /**
  * GET /inboxes
+ * List all created inboxes for the DID.
  */
 app.get('/inboxes', async (c) => {
-  const did = c.get('did');
-  const inboxes = await getInboxes(c.env.DB, did);
+  const ownerHash = c.get('hashedDid');
+  const inboxes = await getInboxes(c.env.DB, ownerHash);
   return c.json({ inboxes });
 });
 
@@ -224,6 +227,11 @@ app.post('/extend/:id', async (c) => {
  * GET /janitor/purge
  */
 app.get('/janitor/purge', async (c) => {
+  const adminToken = c.req.header('X-Admin-Token');
+  if (adminToken !== c.env.ADMIN_TOKEN && c.env.DEV_MODE !== 'true') {
+    return c.json({ error: 'Unauthorized Janitor Access' }, 401);
+  }
+
   const expired = await getExpiredRecords(c.env.DB, 50);
   const results = [];
 

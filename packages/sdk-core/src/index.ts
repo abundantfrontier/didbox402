@@ -13,12 +13,14 @@ export class DidBoxClient {
   private async request(path: string, options: RequestInit = {}): Promise<Response> {
     const method = options.method || 'GET';
     const body = options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : '';
+    const timestamp = Date.now();
     
-    const signature = await this.config.signRequest(`${method}${path}${body}`);
+    const signature = await this.config.signRequest(`${timestamp}${method}${path}${body}`);
 
     const headers = new Headers(options.headers);
     headers.set('X-DID', this.config.did);
     headers.set('X-DID-Signature', signature);
+    headers.set('X-DID-Timestamp', timestamp.toString());
     if (body) headers.set('Content-Type', 'application/json');
 
     const res = await fetch(`${this.config.baseUrl}${path}`, { ...options, headers });

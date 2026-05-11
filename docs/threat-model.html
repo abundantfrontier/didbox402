@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 | Threat Model</title>
+    <title>didbox402 (v0.3.0) | Threat Model</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -32,7 +32,7 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Shield: Threat Model</h1>
+        <h1>The Shield: Threat Model <span style="font-size: 0.5em; opacity: 0.7;">v0.3.0</span></h1>
 
         <p>Honesty starts with admitting what <code>didbox402</code> <em>cannot</em> protect. While we aim for maximum privacy, the physical reality of hosting and networking creates metadata "exhaust."</p>
 
@@ -62,9 +62,9 @@
 
         <div class="threat-category">
             <h3>4. Replay Attacks</h3>
-            <p><strong>Threat:</strong> An attacker intercepts a signed storage request and resubmits it to drain the client's funds.</p>
+            <p><strong>Threat:</strong> An attacker intercepts a signed storage request and resubmits it to drain the client's funds or retrieve sensitive data.</p>
             <div class="mitigation">
-                Mitigation: X-DID-Signature must bind to the Request Hash (Method + Path + Body Hash) and include a nonce.
+                Mitigation: X-DID-Signature must bind to the Request Hash (Method + Path + Timestamp + Body Hash) and include a mandatory <strong>X-DID-Timestamp</strong>.
             </div>
         </div>
 
