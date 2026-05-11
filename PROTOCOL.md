@@ -1,4 +1,4 @@
-# didbox402 Protocol Specification (v0.2.0)
+# didbox402 Protocol Specification (v0.2.1)
 
 **didbox402** is an agent-native protocol for ephemeral, paid, and verifiable storage. It facilitates trustless data handoff between autonomous entities using Decentralized Identifiers (DIDs) and micropayments.
 
@@ -13,8 +13,8 @@
 - **Verifiability:** Every transaction is cryptographically signed and economically verified.
 
 ### 1.2 Non-Goals
-- **Permanent Storage:** didbox402 is NOT a replacement for Arweave or IPFS persistence. It is for ephemeral handoffs.
-- **Content Discovery:** The protocol does not support global search or indexing of stored ciphertext.
+- **Permanent Storage:** didbox402 is NOT a replacement for Arweave or IPFS persistence.
+- **Content Discovery:** The protocol does not support global search of stored ciphertext.
 
 ---
 
@@ -23,7 +23,7 @@
 Every request to a didbox402 node MUST be authenticated via DID signatures.
 
 ### 2.1 Supported Identity
-- **did:key:** For v0.2.0, the protocol specifically supports **Ed25519 (z6Mk)** identity keys.
+- **did:key:** Specifically supports **Ed25519 (z6Mk)** identity keys.
 - **Headers:**
   - `X-DID`: The Decentralized Identifier (e.g., `did:key:z6Mkp...`).
   - `X-DID-Signature`: A hex-encoded Ed25519 signature of the request hash.
@@ -44,12 +44,10 @@ Resource allocation is governed by the **402 Payment Required** standard using t
 Storage cost is calculated as:
 `Total_Cost = Math.max(1MB, Size) * Duration_Hours * Base_Rate`
 
-Agents can discover the current rates via `GET /price`.
-
-### 3.2 The x402 Handshake (LSAT)
-1. **Challenge:** Server responds to a creation/extension request with `402 Payment Required`.
-2. **Invoice:** The response contains an `X-Invoice` header with a BOLT11 Lightning Invoice.
-3. **Settlement:** The agent pays the invoice and receives a 32-byte **preimage**.
+### 3.2 The x402 Handshake (Discovery-Challenge-Settlement)
+1. **Discovery:** Client sends a request without `X-Payment`.
+2. **Challenge:** Server responds with `402 Payment Required` and an `X-Invoice` header (BOLT11).
+3. **Settlement:** The agent pays the invoice and receives a **preimage**.
 4. **Fulfillment:** The agent retries the request with `X-Payment: {preimage}`.
 
 ---
@@ -89,5 +87,5 @@ Inboxes are isolated via **Salted DID Hashing**. The server never stores raw rec
 Implementations MUST pass the conformance suite in `packages/server/src/__tests__`.
 
 ---
-**Version:** 0.2.0  
+**Version:** 0.2.1  
 **Status:** Alpha Draft

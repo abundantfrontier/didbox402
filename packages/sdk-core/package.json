@@ -1,8 +1,9 @@
 {
   "name": "@didbox/sdk-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "main": "src/index.ts",
   "dependencies": {
+    "@didbox/sdk-payments": "^0.2.1",
     "hono": "^4.0.0"
   }
 }
