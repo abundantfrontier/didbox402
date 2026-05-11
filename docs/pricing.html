@@ -36,6 +36,17 @@
         <strong>The x402 Rail:</strong> For the MVP, we use the <strong>Lightning Network</strong>. The <code>X-Payment</code> header contains an LSAT (Lightning Service Authentication Token) or a simple preimage proof of a settled invoice.
     </div>
 
+    <h2>Payment Specification</h2>
+    <p>didbox402 nodes act as <strong>Lightning Service Providers</strong>. The payment flow follows the 402 Payment Required standard:</p>
+    
+    <ol>
+        <li><strong>Discovery:</strong> Client sends a request without a payment header.</li>
+        <li><strong>Challenge:</strong> Server responds with <code>402 Payment Required</code> and an <code>X-Invoice</code> header containing a Lightning Invoice (BOLT11).</li>
+        <li><strong>Settlement:</strong> Client pays the invoice via their Lightning node/wallet.</li>
+        <li><strong>Proof:</strong> Client retries the request with <code>X-Payment: {preimage}</code>.</li>
+        <li><strong>Fulfillment:</strong> Server verifies the preimage and processes the request.</li>
+    </ol>
+
     <h2>The "Edge" of the Handshake</h2>
     <p>The <code>paymentMiddleware</code> needs to know the price *before* it allows the request through. Since <code>didbox402</code> price is dynamic based on the body, we follow this sequence:</p>
     

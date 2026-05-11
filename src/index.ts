@@ -1,10 +1,20 @@
 import { Hono } from 'hono';
 import { verifyDidSignature, hashDid } from './middleware/did';
 import { calculateStoragePrice, calculateRetrievalPrice } from './lib/pricing';
-import { saveStorageRecord, getStorageRecord, updateExpiration, getInboxRecords, saveInbox, getInboxes } from './lib/storage';
+import { saveStorageRecord, getStorageRecord, updateExpiration, getInboxRecords, saveInbox, getInboxes, getExpiredRecords, deleteStorageRecord } from './lib/storage';
 import { Env } from './types/env';
 
 const app = new Hono<{ Bindings: Env }>();
+
+/**
+ * Mock payment verification for x402.
+ * In production, this would verify an LSAT preimage or a blockchain transaction.
+ */
+function verifyPayment(paymentHeader: string | undefined, expectedPrice: number): boolean {
+  if (!paymentHeader) return false;
+  // Stub: Accept anything that starts with "mock_" for now.
+  return paymentHeader.startsWith('mock_');
+}
 
 // All routes require DID authentication
 app.use('*', verifyDidSignature);
@@ -21,7 +31,9 @@ app.post('/inboxes', async (c) => {
   const hashedId = await hashDid(did + (alias || 'default'), salt);
   
   const creationFee = parseInt(c.env.INBOX_CREATION_FEE || '1000');
-  // TODO: Verify x402 payment for creationFee
+  if (!verifyPayment(c.req.header('X-Payment'), creationFee)) {
+    return c.json({ error: 'Payment Required', amount_satoshis: creationFee }, 402);
+  }
 
   await saveInbox(c.env.DB, {
     ownerDid: did,
@@ -55,13 +67,15 @@ app.post('/store', async (c) => {
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
   const price = calculateStoragePrice(sizeBytes, durationHours, baseRate);
 
+  if (!verifyPayment(c.req.header('X-Payment'), price)) {
+    return c.json({ error: 'Payment Required', amount_satoshis: price }, 402);
+  }
+
   const storageId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + durationHours * 3600 * 1000).toISOString();
   
   const salt = c.env.SERVICE_SALT || 'default_salt';
   const ownerHash = c.get('hashedDid');
-  
-  // Recipient hash is now scoped by the optional inboxAlias
   const recipientHash = recipientDid ? 
     await hashDid(recipientDid + (inboxAlias || 'default'), salt) : 
     null;
@@ -87,9 +101,11 @@ app.post('/store', async (c) => {
 
 /**
  * GET /retrieve/:id
+ * Headers: X-DID, X-DID-Signature, X-Inbox-Alias (optional for recipient)
  */
 app.get('/retrieve/:id', async (c) => {
   const id = c.req.param('id');
+  const alias = c.req.header('X-Inbox-Alias') || 'default';
   const record = await getStorageRecord(c.env.DB, id);
 
   if (!record) return c.json({ error: 'Not found' }, 404);
@@ -98,13 +114,16 @@ app.get('/retrieve/:id', async (c) => {
     return c.json({ error: 'Expired' }, 410);
   }
 
-  const hashedDid = c.get('hashedDid');
-  // Authorization is now tricky because hashedDid (salted DID) doesn't include the alias.
-  // We need to re-verify or store the raw recipientHash check.
-  // For the MVP, we assume the caller provides their DID and we check if any of their inboxes match.
-  
-  // TODO: More robust authorization check for recipientHash across aliases
-  
+  // Check authorization
+  const did = c.get('did');
+  const salt = c.env.SERVICE_SALT || 'default_salt';
+  const ownerHash = c.get('hashedDid');
+  const recipientHashForAlias = await hashDid(did + alias, salt);
+
+  if (ownerHash !== record.ownerHash && recipientHashForAlias !== record.recipientHash) {
+    return c.json({ error: 'Unauthorized' }, 403);
+  }
+
   const object = await c.env.STORAGE_BUCKET.get(`ciphertext/${id}`);
   if (!object) return c.json({ error: 'Blob not found' }, 404);
 
@@ -143,15 +162,17 @@ app.post('/extend/:id', async (c) => {
   const record = await getStorageRecord(c.env.DB, id);
   if (!record) return c.json({ error: 'Not found' }, 404);
 
-  const hashedDid = c.get('hashedDid');
-  if (hashedDid !== record.ownerHash && hashedDid !== record.recipientHash) {
+  const ownerHash = c.get('hashedDid');
+  if (ownerHash !== record.ownerHash) {
     return c.json({ error: 'Unauthorized' }, 403);
   }
 
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
   const extraCost = calculateStoragePrice(record.sizeBytes, additionalHours, baseRate);
 
-  // TODO: Verify payment
+  if (!verifyPayment(c.req.header('X-Payment'), extraCost)) {
+    return c.json({ error: 'Payment Required', amount_satoshis: extraCost }, 402);
+  }
 
   const newExpiresAt = new Date(new Date(record.expiresAt).getTime() + additionalHours * 3600 * 1000).toISOString();
   await updateExpiration(c.env.DB, id, newExpiresAt);
@@ -161,6 +182,24 @@ app.post('/extend/:id', async (c) => {
     newExpiresAt,
     additionalCostSatoshis: extraCost
   });
+});
+
+/**
+ * GET /janitor/purge
+ * Scheduled or manual cleanup of expired records.
+ */
+app.get('/janitor/purge', async (c) => {
+  // In production, this would be restricted to internal/admin IPs.
+  const expired = await getExpiredRecords(c.env.DB, 50);
+  const results = [];
+
+  for (const record of expired) {
+    await c.env.STORAGE_BUCKET.delete(`ciphertext/${record.id}`);
+    await deleteStorageRecord(c.env.DB, record.id);
+    results.push(record.id);
+  }
+
+  return c.json({ purged: results });
 });
 
 export default app;

@@ -72,3 +72,11 @@ export async function getInboxRecords(db: D1Database, recipientHash: string): Pr
 export async function deleteStorageRecord(db: D1Database, id: string) {
   return db.prepare("DELETE FROM storage_records WHERE id = ?").bind(id).run();
 }
+
+export async function getExpiredRecords(db: D1Database, limit: number = 100): Promise<StorageRecord[]> {
+  const { results } = await db
+    .prepare("SELECT * FROM storage_records WHERE expires_at < ? LIMIT ?")
+    .bind(new Date().toISOString(), limit)
+    .all();
+  return results as unknown as StorageRecord[];
+}
