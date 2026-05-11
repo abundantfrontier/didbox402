@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 | Storage Principles</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; }
+        .principle-card { border: 1px solid #eee; padding: 20px; border-radius: 8px; margin-bottom: 20px; background: white; }
+        .principle-card h3 { margin-top: 0; color: #007aff; }
+        .scaling-box { background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 4px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-link">← Index</a>
+    <h1>The Foundation: Storage Principles</h1>
+
+    <p>To achieve <strong>hands-off scaling</strong> and <strong>LLM compatibility</strong>, didbox402 follows a strict separation of concerns between BLOB storage (Files) and Relational storage (Database).</p>
+
+    <div class="scaling-box">
+        <strong>Scaling Philosophy:</strong> Assume the protocol will handle billions of small objects. No single human should ever need to "rebalance" the cluster.
+    </div>
+
+    <div class="principle-card">
+        <h3>1. Payloads are Opaque (BLOBs)</h3>
+        <p><strong>Constraint:</strong> The core server never parses the content of a stored item.</p>
+        <p><strong>Why:</strong> Scaling file storage (R2/S3) is a solved problem. By keeping payloads opaque and client-side encrypted, we offload the heavy lifting to specialized infrastructure that scales horizontally without database locking overhead.</p>
+    </div>
+
+    <div class="principle-card">
+        <h3>2. Metadata is Structured (DB)</h3>
+        <p><strong>Constraint:</strong> Only use the database for identity, expiration, and discovery (hashes).</p>
+        <p><strong>Why:</strong> Relational databases are for <em>searching</em>, not <em>storing</em>. By keeping the DB rows tiny (Fixed-size hashes and timestamps), we ensure that the index stays in-memory (hot) for millions of records, enabling low-latency "Inbox" lookups.</p>
+    </div>
+
+    <div class="principle-card">
+        <h3>3. LLM-Friendly Transparency</h3>
+        <p><strong>Constraint:</strong> Protocol responses must be self-describing JSON with explicit units (e.g., <code>size_bytes</code>, not <code>size</code>).</p>
+        <p><strong>Why:</strong> Agents need to reason about their own resource usage. If an LLM-agent can't understand the pricing response or the metadata headers, it can't make autonomous decisions about whether to extend a storage lease.</p>
+    </div>
+
+    <div class="principle-card">
+        <h3>4. Automatic Garbage Collection</h3>
+        <p><strong>Constraint:</strong> Storage is a <em>lease</em>, not a <em>right</em>.</p>
+        <p><strong>Why:</strong> Hands-off scaling requires that dead data removes itself. By tying every BLOB to a mandatory <code>expires_at</code> timestamp in the DB, the system remains lean. If a payment isn't renewed, the data is purged, preventing "abandoned-data bloat."</p>
+    </div>
+
+    <div class="principle-card">
+        <h3>5. Cryptographic Sovereignty</h3>
+        <p><strong>Constraint:</strong> The provider is a "Ghost." It holds no keys and makes no claims to the data.</p>
+        <p><strong>Why:</strong> Agents must retain full control. By using DID-based signatures and client-side encryption, the storage provider becomes a pure commodity. If a provider becomes malicious or expensive, the agent can migrate to a new node using their same DID identity.</p>
+    </div>
+
+    <div class="principle-card">
+        <h3>6. Verifiable Economics</h3>
+        <p><strong>Constraint:</strong> Pricing must be deterministic and calculable offline.</p>
+        <p><strong>Why:</strong> Agents should never be surprised by a 402 rejection. By making the pricing formula public and simple, agents can verify they are paying the fair rate and can calculate their "burn rate" for long-term storage without querying the server.</p>
+    </div>
+
+    <div class="principle-card">
+        <h3>7. Stateless Autonomy</h3>
+        <p><strong>Constraint:</strong> Every request must be self-contained (Stateless).</p>
+        <p><strong>Why:</strong> Scaling to billions of agents requires that the server doesn't "remember" the user between requests. No sessions, no cookies. Identity is proven per-request via <code>X-DID-Signature</code>. This allows for massive horizontal scaling across any cloud provider.</p>
+    </div>
+
+    <h2>Decision Matrix</h2>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <tr style="border-bottom: 1px solid #eee; background: #f9f9f9;">
+            <th style="padding: 10px; text-align: left;">Data Type</th>
+            <th style="padding: 10px; text-align: left;">Storage Method</th>
+            <th style="padding: 10px; text-align: left;">Reasoning</th>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px;">Ciphertext</td>
+            <td style="padding: 10px;">BLOB (R2/S3)</td>
+            <td style="padding: 10px;">High volume, low searchability.</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px;">Expiration</td>
+            <td style="padding: 10px;">DB (D1/SQLite)</td>
+            <td style="padding: 10px;">Fast range queries for Janitor.</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px;">Inbox IDs</td>
+            <td style="padding: 10px;">DB (D1/SQLite)</td>
+            <td style="padding: 10px;">Point lookups for discovery.</td>
+        </tr>
+    </table>
+</body>
+</html>

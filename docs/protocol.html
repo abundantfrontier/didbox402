@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 | Protocol Spec</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; }
+        .spec-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .spec-table th, .spec-table td { border: 1px solid #eee; padding: 10px; text-align: left; }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-link">← Index</a>
+    <h1>The Handshake: Protocol Spec</h1>
+
+    <h2>Headers</h2>
+    <table class="spec-table">
+        <tr><th>Header</th><th>Example</th></tr>
+        <tr><td><code>X-DID</code></td><td><code>did:key:z6MkpTHR...</code></td></tr>
+        <tr><td><code>X-DID-Signature</code></td><td><code>base64(...)</code></td></tr>
+        <tr><td><code>X-Payment</code></td><td><code>preimage:...</code></td></tr>
+    </table>
+
+    <h2>Authorization</h2>
+    <p>The server verifies the signature against the DID. Access to <code>/retrieve/{id}</code> is granted only if the caller DID matches the stored <code>owner_hash</code> or <code>recipient_hash</code>.</p>
+</body>
+</html>

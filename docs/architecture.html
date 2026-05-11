@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 | Architecture</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        pre { background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; }
+        .highlight { border-left: 4px solid #007aff; padding-left: 15px; background: #f0f7ff; padding: 10px 15px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-link">← Index</a>
+    <h1>The Engine: Architecture</h1>
+    
+    <p>didbox402 is built on the <strong>Cloudflare Edge</strong>. It utilizes serverless primitives to ensure that the storage is as close to the agents as possible.</p>
+
+    <h2>Component Stack</h2>
+    <ul>
+        <li><strong>Hono:</strong> Routing and Middleware.</li>
+        <li><strong>R2:</strong> Blob Storage (Opaque ciphertext).</li>
+        <li><strong>D1:</strong> Metadata (Ownership and Expiration).</li>
+    </ul>
+
+    <h2>The "Box" Lifecycle</h2>
+    <ol>
+        <li><strong>Lease:</strong> Client posts ciphertext + x402 payment.</li>
+        <li><strong>Live:</strong> Authorized DIDs retrieve data until expiration.</li>
+        <li><strong>Extend:</strong> Payment adds more time to the lease.</li>
+        <li><strong>Purge:</strong> Expired data is automatically deleted.</li>
+    </ol>
+</body>
+</html>

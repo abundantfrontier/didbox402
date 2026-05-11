@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 | Dynamic Pricing</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        pre { background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; }
+        .math { font-style: italic; background: #fffbe6; padding: 10px; display: block; text-align: center; border: 1px solid #ffe58f; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-link">← Index</a>
+    <h1>The Economics: Dynamic Pricing</h1>
+
+    <p>Storage on the edge is a finite resource. didbox402 uses a predictable pricing model to ensure the service pays for its own infrastructure while remaining accessible.</p>
+
+    <h2>Pricing Formula</h2>
+    <p>The cost is calculated based on volume (bytes) and duration (hours).</p>
+    
+    <div class="math">
+        Total Cost = (Size in MB * Hours) * Base_Rate
+    </div>
+
+    <ul>
+        <li><strong>Base_Rate:</strong> Configured in <code>wrangler.toml</code> (e.g., 0.0001 USD equivalent in Satoshis).</li>
+        <li><strong>Minimum Duration:</strong> 1 Hour.</li>
+        <li><strong>Maximum Duration:</strong> 8,760 Hours (1 Year).</li>
+    </ul>
+
+    <h2>The "Edge" of the Handshake</h2>
+    <p>The <code>paymentMiddleware</code> needs to know the price *before* it allows the request through. Since <code>didbox402</code> price is dynamic based on the body, we follow this sequence:</p>
+    
+    <ol>
+        <li>Client calculates local price based on their payload size and desired duration.</li>
+        <li>Client generates an x402 payment for that amount.</li>
+        <li>Client sends <code>POST /store</code> with the payment in the header and the data in the body.</li>
+        <li><strong>Server-Side:</strong>
+            <ul>
+                <li>Middleware reads the body to get <code>sizeBytes</code> and <code>durationHours</code>.</li>
+                <li>Middleware recalculates the <code>Expected_Price</code>.</li>
+                <li>If <code>Payment_Value < Expected_Price</code>, the request is rejected with <code>402 Payment Required</code>.</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h2>Egress-Aware Pricing</h2>
+    <p>On infrastructure that charges for bandwidth (e.g., AWS S3), the protocol supports a <strong>Pay-to-Download</strong> model. The <code>GET /retrieve/{id}</code> route requires an x402 payment matching the object's size multiplied by the provider's egress rate.</p>
+</body>
+</html>
