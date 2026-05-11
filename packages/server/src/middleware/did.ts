@@ -55,6 +55,17 @@ export async function verifyDidSignature(c: Context, next: Next) {
     return c.json({ error: 'X-DID-Timestamp outside allowed window' }, 401);
   }
 
+  // Nonce tracking (prevent replay of the same signature)
+  const existingNonce = await c.env.DB.prepare("SELECT signature FROM nonces WHERE signature = ?").bind(signature).first();
+  if (existingNonce) {
+    return c.json({ error: 'Replay detected: Signature already used' }, 401);
+  }
+
+  // Store nonce (expires when the drift window expires)
+  await c.env.DB.prepare("INSERT INTO nonces (signature, expires_at) VALUES (?, ?)")
+    .bind(signature, timestamp + 5 * 60 * 1000)
+    .run();
+
   try {
     const publicKey = extractPublicKeyFromDid(did);
 

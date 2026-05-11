@@ -241,6 +241,9 @@ app.get('/janitor/purge', async (c) => {
     results.push(record.id);
   }
 
+  // Purge old nonces
+  await c.env.DB.prepare("DELETE FROM nonces WHERE expires_at < ?").bind(Date.now()).run();
+
   return c.json({ purged: results });
 });
 

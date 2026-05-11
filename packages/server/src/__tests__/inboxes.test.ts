@@ -27,6 +27,7 @@ describe('Inbox Management', () => {
   beforeAll(async () => {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS inboxes (owner_hash TEXT NOT NULL, alias TEXT NOT NULL, hashed_id TEXT NOT NULL PRIMARY KEY, created_at TEXT NOT NULL)`).run();
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS storage_records (id TEXT PRIMARY KEY, owner_hash TEXT NOT NULL, recipient_hash TEXT, size_bytes INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)`).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS nonces (signature TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)`).run();
   });
 
   test('Create and List Inboxes', async () => {

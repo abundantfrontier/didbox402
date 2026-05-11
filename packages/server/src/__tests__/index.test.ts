@@ -46,6 +46,12 @@ describe('didbox402 Protocol v0.3.0 Conformance', () => {
         created_at TEXT NOT NULL
       )
     `).run();
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS nonces (
+        signature TEXT PRIMARY KEY,
+        expires_at INTEGER NOT NULL
+      )
+    `).run();
   });
 
   test('1. Economic Integrity: Returns 402 Challenge with correct price', async () => {

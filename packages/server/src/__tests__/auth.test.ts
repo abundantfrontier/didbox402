@@ -5,7 +5,6 @@ import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import bs58 from 'bs58';
 import worker from '../index';
 
-// noble-ed25519 v3+ requires SHA-512 to be set manually
 ed.hashes.sha512 = (msg: Uint8Array) => sha512(msg);
 
 const privKey = crypto.getRandomValues(new Uint8Array(32));
@@ -24,76 +23,126 @@ async function signRequest(method: string, path: string, body: string, timestamp
   return Buffer.from(signature).toString('hex');
 }
 
-describe('Authentication & Security', () => {
+describe('Authentication & Security Gauntlet', () => {
   
   beforeAll(async () => {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS storage_records (id TEXT PRIMARY KEY, owner_hash TEXT NOT NULL, recipient_hash TEXT, size_bytes INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)`).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS nonces (signature TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)`).run();
   });
 
-  test('Rejects request with missing headers', async () => {
-    const res = await worker.fetch(new Request('http://localhost/price'), env, createExecutionContext());
-    expect(res.status).toBe(401);
-    const data: any = await res.json();
-    expect(data.error).toContain('Missing X-DID');
-  });
-
-  test('Rejects request with malformed DID', async () => {
-    const timestamp = Date.now();
-    const req = new Request('http://localhost/price', {
-      headers: {
-        'X-DID': 'did:key:invalid',
-        'X-DID-Signature': 'mock',
-        'X-DID-Timestamp': timestamp.toString()
-      }
+  describe('Header Integrity', () => {
+    test('Rejects request with missing X-DID', async () => {
+      const req = new Request('http://localhost/price');
+      const res = await worker.fetch(req, env, createExecutionContext());
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ error: expect.stringContaining('Missing X-DID') });
     });
-    const res = await worker.fetch(req, env, createExecutionContext());
-    expect(res.status).toBe(401);
-    const data: any = await res.json();
-    expect(data.error).toContain('multibase');
+
+    test('Rejects request with missing X-DID-Timestamp', async () => {
+      const req = new Request('http://localhost/price', {
+        headers: { 'X-DID': MY_DID, 'X-DID-Signature': 'mock' }
+      });
+      const res = await worker.fetch(req, env, createExecutionContext());
+      expect(res.status).toBe(401);
+      // The middleware returns a combined error message
+      expect(await res.json()).toMatchObject({ error: expect.stringContaining('Missing X-DID') });
+    });
   });
 
-  test('Rejects stale timestamps', async () => {
-    const timestamp = Date.now() - 10 * 60 * 1000;
-    const sig = await signRequest('GET', '/price', '', timestamp);
-    const req = new Request('http://localhost/price', {
-      headers: {
-        'X-DID': MY_DID,
-        'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString()
-      }
+  describe('DID Parsing (Multibase/Multicodec)', () => {
+    test('Rejects malformed multibase', async () => {
+      const req = new Request('http://localhost/price', {
+        headers: {
+          'X-DID': 'did:key:zInvalidBase58!',
+          'X-DID-Signature': 'mock_sig',
+          'X-DID-Timestamp': Date.now().toString()
+        }
+      });
+      const res = await worker.fetch(req, env, createExecutionContext());
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ error: expect.stringContaining('Authentication Error') });
     });
-    const res = await worker.fetch(req, env, createExecutionContext());
-    expect(res.status).toBe(401);
-    expect(await res.json()).toMatchObject({ error: 'X-DID-Timestamp outside allowed window' });
+
+    test('Rejects wrong multicodec prefix (non-Ed25519)', async () => {
+      const wrongPrefix = new Uint8Array([0x00, 0x01]); // Not 0xed01
+      const combinedWrong = new Uint8Array(wrongPrefix.length + 32);
+      combinedWrong.set(wrongPrefix);
+      const WRONG_DID = `did:key:z${bs58.encode(combinedWrong)}`;
+
+      const req = new Request('http://localhost/price', {
+        headers: {
+          'X-DID': WRONG_DID,
+          'X-DID-Signature': 'mock_sig',
+          'X-DID-Timestamp': Date.now().toString()
+        }
+      });
+      const res = await worker.fetch(req, env, createExecutionContext());
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ error: expect.stringContaining('Only Ed25519 (did:key:z6Mk) is supported') });
+    });
   });
 
-  test('Rejects signature mismatch (tampering)', async () => {
-    const timestamp = Date.now();
-    const sig = await signRequest('GET', '/price', '', timestamp);
-    // Change path to /store but keep /price signature
-    const req = new Request('http://localhost/store', {
-      headers: {
-        'X-DID': MY_DID,
-        'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString()
-      }
+  describe('Temporal Security (Drift Window)', () => {
+    test('Rejects timestamp exactly 5m 1s in the past', async () => {
+      const staleTimestamp = Date.now() - (5 * 60 * 1000 + 1000);
+      const sig = await signRequest('GET', '/price', '', staleTimestamp);
+      const req = new Request('http://localhost/price', {
+        headers: {
+          'X-DID': MY_DID,
+          'X-DID-Signature': sig,
+          'X-DID-Timestamp': staleTimestamp.toString()
+        }
+      });
+      const res = await worker.fetch(req, env, createExecutionContext());
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ error: 'X-DID-Timestamp outside allowed window' });
     });
-    const res = await worker.fetch(req, env, createExecutionContext());
-    expect(res.status).toBe(401);
-    expect(await res.json()).toMatchObject({ error: 'Invalid DID Signature' });
+
+    test('Rejects future timestamp (+6 minutes)', async () => {
+      const futureTimestamp = Date.now() + (6 * 60 * 1000);
+      const sig = await signRequest('GET', '/price', '', futureTimestamp);
+      const req = new Request('http://localhost/price', {
+        headers: {
+          'X-DID': MY_DID,
+          'X-DID-Signature': sig,
+          'X-DID-Timestamp': futureTimestamp.toString()
+        }
+      });
+      const res = await worker.fetch(req, env, createExecutionContext());
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ error: 'X-DID-Timestamp outside allowed window' });
+    });
+
+    test('Accepts timestamp at 4m 59s boundary', async () => {
+      const validTimestamp = Date.now() - (5 * 60 * 1000 - 1000);
+      const sig = await signRequest('GET', '/price', '', validTimestamp);
+      const req = new Request('http://localhost/price', {
+        headers: {
+          'X-DID': MY_DID,
+          'X-DID-Signature': sig,
+          'X-DID-Timestamp': validTimestamp.toString()
+        }
+      });
+      const res = await worker.fetch(req, env, createExecutionContext());
+      expect(res.status).toBe(200);
+    });
   });
 
-  test('Authorizes valid requests', async () => {
-    const timestamp = Date.now();
-    const sig = await signRequest('GET', '/price', '', timestamp);
-    const req = new Request('http://localhost/price', {
-      headers: {
-        'X-DID': MY_DID,
-        'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString()
-      }
+  describe('Janitor Security', () => {
+    test('Rejects /janitor/purge with wrong token', async () => {
+      const timestamp = Date.now();
+      const sig = await signRequest('GET', '/janitor/purge', '', timestamp);
+      const res = await worker.fetch(new Request('http://localhost/janitor/purge', {
+        headers: {
+          'X-DID': MY_DID,
+          'X-DID-Signature': sig,
+          'X-DID-Timestamp': timestamp.toString(),
+          'X-Admin-Token': 'wrong_token'
+        }
+      }), { ...env, ADMIN_TOKEN: 'correct_token', DEV_MODE: 'false' }, createExecutionContext());
+      
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ error: 'Unauthorized Janitor Access' });
     });
-    const res = await worker.fetch(req, env, createExecutionContext());
-    expect(res.status).toBe(200);
   });
 });

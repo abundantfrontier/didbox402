@@ -26,6 +26,7 @@ describe('Storage Operations', () => {
   
   beforeAll(async () => {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS storage_records (id TEXT PRIMARY KEY, owner_hash TEXT NOT NULL, recipient_hash TEXT, size_bytes INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)`).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS nonces (signature TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)`).run();
   });
 
   test('Store and Retrieve Flow', async () => {
@@ -62,6 +63,46 @@ describe('Storage Operations', () => {
     expect(retrieveRes.status).toBe(200);
     const retrieved = await retrieveRes.json() as any;
     expect(retrieved.ciphertext).toBe('storage_test');
+  });
+
+  test('Privacy Invariant: Raw DID never appears in DB', async () => {
+    // Check all records in DB for the raw DID string
+    const { results } = await env.DB.prepare("SELECT * FROM storage_records").all();
+    for (const row of results as any[]) {
+      expect(JSON.stringify(row)).not.toContain(MY_DID);
+    }
+  });
+
+  test('Replay Protection: Rejects reused valid signature (nonce tracking)', async () => {
+    const timestamp = Date.now();
+    const payload = { ciphertext: 'replay_test', durationHours: 1 };
+    const sig = await signRequest('POST', '/store', JSON.stringify(payload), timestamp);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-DID': MY_DID,
+      'X-DID-Signature': sig,
+      'X-DID-Timestamp': timestamp.toString(),
+      'X-Payment': 'preimage_100_ok'
+    };
+
+    // First request should succeed
+    const res1 = await worker.fetch(new Request('http://localhost/store', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    }), env, createExecutionContext());
+    expect(res1.status).toBe(200);
+
+    // Second request with SAME signature and timestamp should fail
+    const res2 = await worker.fetch(new Request('http://localhost/store', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    }), env, createExecutionContext());
+    
+    expect(res2.status).toBe(401);
+    expect(await res2.json()).toMatchObject({ error: expect.stringContaining('Replay detected') });
   });
 
   test('Prevents unauthorized retrieval', async () => {
