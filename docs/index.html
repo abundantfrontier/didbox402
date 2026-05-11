@@ -24,6 +24,7 @@
         .prototype-box { margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; }
         .prototype-box h2 { color: #000; }
         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+            .assertion, pre, .mitigation, .scaling-box, .math { background: #1e1e1e !important; color: #4ec9b0 !important; }
     </style>
 </head>
 <body>
@@ -79,14 +80,18 @@
             <strong>Temporal Hardening:</strong> v0.3.0 implements mandatory <strong>Replay Protection (Nonce Tracking)</strong> and standard <strong>Multibase DID Parsing</strong>.
         </div>
 
+        <div style="background: #e6f7ff; border: 1px solid #91d5ff; padding: 15px; margin-top: 20px; border-radius: 8px; font-size: 0.9rem;">
+            <strong>Viewing Tip:</strong> To ensure all links to source code work, run <strong>python3 -m http.server 8080</strong> from the project root and open <code>http://localhost:8080/docs/</code>.
+        </div>
+
         <section class="prototype-box">
             <h2>Developer Resources</h2>
             <p>Ready to build? Use the following resources to integrate with the protocol:</p>
             <ul>
-                <li><strong><a href="../PROTOCOL.md">Formal Protocol Specification (v0.3.0)</a></strong></li>
-                <li><code>packages/server/src/index.ts</code>: The Hono Edge Server (Reference Node).</li>
-                <li><code>packages/sdk-core/src/index.ts</code>: TypeScript Client Library for Agents.</li>
-                <li><code>scripts/demo.ts</code>: End-to-end integration demo.</li>
+                <li><strong><a href="protocol-spec.html">Formal Protocol Specification (v0.3.0)</a></strong></li>
+                <li><a href="../packages/server/src/index.ts"><code>packages/server/src/index.ts</code></a>: Hono Edge Server.</li>
+                <li><a href="../packages/sdk-core/src/index.ts"><code>packages/sdk-core/src/index.ts</code></a>: TypeScript Client Library.</li>
+                <li><a href="../scripts/demo.ts"><code>scripts/demo.ts</code></a>: Integration demo.</li>
             </ul>
         </section>
     </div>
