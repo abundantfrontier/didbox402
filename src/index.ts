@@ -81,48 +81,49 @@ app.post('/store', async (c) => {
     null;
 
   await c.env.STORAGE_BUCKET.put(`ciphertext/${storageId}`, ciphertext);
+// Store metadata in D1
+await saveStorageRecord(c.env.DB, {
+  id: storageId,
+  owner_hash: ownerHash,
+  recipient_hash: recipientHash,
+  size_bytes: sizeBytes,
+  created_at: new Date().toISOString(),
+  expires_at: expiresAt,
+});
 
-  await saveStorageRecord(c.env.DB, {
-    id: storageId,
-    ownerHash,
-    recipientHash,
-    sizeBytes,
-    createdAt: new Date().toISOString(),
-    expiresAt,
-  });
-
-  return c.json({
-    storageId,
-    expiresAt,
-    sizeBytes,
-    pricePaidSatoshis: price
-  });
+return c.json({
+  storageId,
+  expiresAt,
+  sizeBytes,
+  pricePaidSatoshis: price
+});
 });
 
 /**
- * GET /retrieve/:id
- * Headers: X-DID, X-DID-Signature, X-Inbox-Alias (optional for recipient)
- */
+* GET /retrieve/:id
+* Headers: X-DID, X-DID-Signature, X-Inbox-Alias (optional for recipient)
+*/
 app.get('/retrieve/:id', async (c) => {
-  const id = c.req.param('id');
-  const alias = c.req.header('X-Inbox-Alias') || 'default';
-  const record = await getStorageRecord(c.env.DB, id);
+const id = c.req.param('id');
+const alias = c.req.header('X-Inbox-Alias') || 'default';
+const record = await getStorageRecord(c.env.DB, id);
 
-  if (!record) return c.json({ error: 'Not found' }, 404);
+if (!record) return c.json({ error: 'Not found' }, 404);
 
-  if (new Date() > new Date(record.expiresAt)) {
-    return c.json({ error: 'Expired' }, 410);
-  }
+if (new Date() > new Date(record.expires_at)) {
+  return c.json({ error: 'Expired' }, 410);
+}
 
-  // Check authorization
-  const did = c.get('did');
-  const salt = c.env.SERVICE_SALT || 'default_salt';
-  const ownerHash = c.get('hashedDid');
-  const recipientHashForAlias = await hashDid(did + alias, salt);
+// Check authorization
+const did = c.get('did');
+const salt = c.env.SERVICE_SALT || 'default_salt';
+const ownerHash = c.get('hashedDid');
+const recipientHashForAlias = await hashDid(did + alias, salt);
 
-  if (ownerHash !== record.ownerHash && recipientHashForAlias !== record.recipientHash) {
-    return c.json({ error: 'Unauthorized' }, 403);
-  }
+if (ownerHash !== record.owner_hash && recipientHashForAlias !== record.recipient_hash) {
+  return c.json({ error: 'Unauthorized' }, 403);
+}
+
 
   const object = await c.env.STORAGE_BUCKET.get(`ciphertext/${id}`);
   if (!object) return c.json({ error: 'Blob not found' }, 404);
@@ -146,8 +147,8 @@ app.get('/inbox/:alias?', async (c) => {
     alias,
     items: records.map(r => ({
       id: r.id,
-      sizeBytes: r.sizeBytes,
-      expiresAt: r.expiresAt
+      sizeBytes: r.size_bytes,
+      expiresAt: r.expires_at
     }))
   });
 });
@@ -163,18 +164,18 @@ app.post('/extend/:id', async (c) => {
   if (!record) return c.json({ error: 'Not found' }, 404);
 
   const ownerHash = c.get('hashedDid');
-  if (ownerHash !== record.ownerHash) {
+  if (ownerHash !== record.owner_hash) {
     return c.json({ error: 'Unauthorized' }, 403);
   }
 
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
-  const extraCost = calculateStoragePrice(record.sizeBytes, additionalHours, baseRate);
+  const extraCost = calculateStoragePrice(record.size_bytes, additionalHours, baseRate);
 
   if (!verifyPayment(c.req.header('X-Payment'), extraCost)) {
     return c.json({ error: 'Payment Required', amount_satoshis: extraCost }, 402);
   }
 
-  const newExpiresAt = new Date(new Date(record.expiresAt).getTime() + additionalHours * 3600 * 1000).toISOString();
+  const newExpiresAt = new Date(new Date(record.expires_at).getTime() + additionalHours * 3600 * 1000).toISOString();
   await updateExpiration(c.env.DB, id, newExpiresAt);
 
   return c.json({

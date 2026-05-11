@@ -7,7 +7,7 @@ export function calculateStoragePrice(
   durationHours: number,
   baseRatePerMbHour: number
 ): number {
-  const sizeMb = sizeBytes / (1024 * 1024);
+  const sizeMb = Math.max(1, sizeBytes / (1024 * 1024));
   const cost = sizeMb * durationHours * baseRatePerMbHour;
   return Math.ceil(cost);
 }
@@ -20,7 +20,7 @@ export function calculateRetrievalPrice(
   sizeBytes: number,
   egressRatePerMb: number
 ): number {
-  const sizeMb = sizeBytes / (1024 * 1024);
+  const sizeMb = Math.max(1, sizeBytes / (1024 * 1024));
   const cost = sizeMb * egressRatePerMb;
   return Math.ceil(cost);
 }

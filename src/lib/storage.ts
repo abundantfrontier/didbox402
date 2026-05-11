@@ -1,17 +1,17 @@
 export interface StorageRecord {
   id: string;
-  ownerHash: string;
-  recipientHash: string | null;
-  sizeBytes: number;
-  createdAt: string;
-  expiresAt: string;
+  owner_hash: string;
+  recipient_hash: string | null;
+  size_bytes: number;
+  created_at: string;
+  expires_at: string;
 }
 
 export interface InboxRecord {
-  ownerDid: string;
+  owner_did: string;
   alias: string;
-  hashedId: string;
-  createdAt: string;
+  hashed_id: string;
+  created_at: string;
 }
 
 export async function saveStorageRecord(db: D1Database, record: StorageRecord) {
@@ -21,11 +21,11 @@ export async function saveStorageRecord(db: D1Database, record: StorageRecord) {
     )
     .bind(
       record.id,
-      record.ownerHash,
-      record.recipientHash,
-      record.sizeBytes,
-      record.createdAt,
-      record.expiresAt
+      record.owner_hash,
+      record.recipient_hash,
+      record.size_bytes,
+      record.created_at,
+      record.expires_at
     )
     .run();
 }
@@ -35,7 +35,7 @@ export async function saveInbox(db: D1Database, inbox: InboxRecord) {
     .prepare(
       "INSERT INTO inboxes (owner_did, alias, hashed_id, created_at) VALUES (?, ?, ?, ?)"
     )
-    .bind(inbox.ownerDid, inbox.alias, inbox.hashedId, inbox.createdAt)
+    .bind(inbox.owner_did, inbox.alias, inbox.hashed_id, inbox.created_at)
     .run();
 }
 
