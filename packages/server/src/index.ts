@@ -50,6 +50,19 @@ function challenge402(c: any, amount: number) {
 app.use('*', verifyDidSignature);
 
 /**
+ * GET /price
+ * Discover current storage and egress rates.
+ */
+app.get('/price', async (c) => {
+  return c.json({
+    base_rate_per_mb_hour: parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100'),
+    inbox_creation_fee: parseInt(c.env.INBOX_CREATION_FEE || '1000'),
+    egress_rate_per_mb: parseInt(c.env.EGRESS_RATE_PER_MB || '0'),
+    min_charge_mb: 1
+  });
+});
+
+/**
  * POST /inboxes
  */
 app.post('/inboxes', async (c) => {

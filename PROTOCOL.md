@@ -1,4 +1,4 @@
-# didbox402 Protocol Specification (v0.1.0)
+# didbox402 Protocol Specification (v0.2.0)
 
 **didbox402** is an agent-native protocol for ephemeral, paid, and verifiable storage. It facilitates trustless data handoff between autonomous entities using Decentralized Identifiers (DIDs) and micropayments.
 
@@ -15,127 +15,79 @@
 ### 1.2 Non-Goals
 - **Permanent Storage:** didbox402 is NOT a replacement for Arweave or IPFS persistence. It is for ephemeral handoffs.
 - **Content Discovery:** The protocol does not support global search or indexing of stored ciphertext.
-- **Identity Management:** didbox402 uses DIDs but does not define how those DIDs are created or resolved.
 
 ---
 
-## 2. Core Principles
+## 2. Authentication (The Shield)
 
-### 2.1 Ephemerality (Lease Model)
-Storage is never permanent. It is a lease defined by `duration_hours`. Once the lease expires, the provider is obligated to purge the data.
+Every request to a didbox402 node MUST be authenticated via DID signatures.
 
-### 2.2 Cryptographic Sovereignty
-The provider is a "ghost." It holds no decryption keys. All data MUST be encrypted client-side before storage. Identity is proven per-request via DID-based signatures.
+### 2.1 Supported Identity
+- **did:key:** For v0.2.0, the protocol specifically supports **Ed25519 (z6Mk)** identity keys.
+- **Headers:**
+  - `X-DID`: The Decentralized Identifier (e.g., `did:key:z6Mkp...`).
+  - `X-DID-Signature`: A hex-encoded Ed25519 signature of the request hash.
 
-### 2.3 Verifiable Economics (x402)
-Resource allocation is governed by the 402 Payment Required standard. Nodes act as Lightning Service Providers (LSPs), requiring Satoshis (via Lightning Network) for storage and egress.
+### 2.2 Signature Binding (Replay Protection)
+To prevent tampering and replay attacks, the signature MUST cover the **Request Hash**:
+`SHA256(Method + Path + Body_Hash)`
 
----
-
-## 3. Authentication (The Handshake)
-
-Every request to a didbox402 node MUST be authenticated.
-
-### 3.1 Headers
-- `X-DID`: The Decentralized Identifier of the caller.
-- `X-DID-Signature`: A cryptographic signature of the request hash.
-- `X-Payment`: (Conditional) The x402 payment proof (preimage).
-
-### 3.2 Signature Binding
-To prevent replay and tampering, the signature MUST cover the request hash:
-`Hash(Method + Path + Body_Hash)`
+Where `Body_Hash` is `SHA256(Raw_Body_Text)`. If the request has no body, the hash of an empty string is used.
 
 ---
 
-## 4. Storage Mechanics
+## 3. Economics (The Rail)
 
-### 4.1 Inbox Isolation (Multi-Inbox)
-A node supports multiple virtual inboxes per DID. Inboxes are identified by a salted hash:
-`Inbox_ID = SHA256(Recipient_DID + Alias + Service_Salt)`
+Resource allocation is governed by the **402 Payment Required** standard using the **Lightning Network**.
 
-### 4.2 Dynamic Pricing
+### 3.1 Dynamic Pricing
 Storage cost is calculated as:
 `Total_Cost = Math.max(1MB, Size) * Duration_Hours * Base_Rate`
 
+Agents can discover the current rates via `GET /price`.
+
+### 3.2 The x402 Handshake (LSAT)
+1. **Challenge:** Server responds to a creation/extension request with `402 Payment Required`.
+2. **Invoice:** The response contains an `X-Invoice` header with a BOLT11 Lightning Invoice.
+3. **Settlement:** The agent pays the invoice and receives a 32-byte **preimage**.
+4. **Fulfillment:** The agent retries the request with `X-Payment: {preimage}`.
+
 ---
 
-## 5. API Specification
+## 4. API Specification
 
-### 5.1 `POST /store`
+### 4.1 `POST /store`
 Creates a new storage box.
+- **Body**: `{ ciphertext, durationHours, recipientDid?, inboxAlias? }`
+- **Auth**: Required.
+- **Payment**: Required (x402).
 
-**Request:**
-```http
-POST /store HTTP/1.1
-X-DID: did:key:z6Mkp...
-X-DID-Signature: base64(...)
-X-Payment: preimage_abc123...
-
-{
-  "ciphertext": "...",
-  "durationHours": 24,
-  "recipientDid": "did:key:z6Mkf...",
-  "inboxAlias": "project-alpha"
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "storageId": "uuid-v4-string",
-  "expiresAt": "2026-05-12T13:00:00Z",
-  "sizeBytes": 1024,
-  "pricePaidSatoshis": 2400
-}
-```
-
-### 5.2 `GET /retrieve/{id}`
+### 4.2 `GET /retrieve/{id}`
 Retrieves the ciphertext of a box.
+- **Headers**: `X-Inbox-Alias` (if recipient).
+- **Auth**: Must be Owner or Recipient of the scoped inbox.
 
-**Request:**
-```http
-GET /retrieve/uuid-v4-string HTTP/1.1
-X-DID: did:key:z6Mkf...
-X-DID-Signature: base64(...)
-X-Inbox-Alias: project-alpha
-```
+### 4.3 `GET /inbox/{alias}`
+Lists active boxes for the authenticated DID in the specified alias (default: `default`).
 
-**Response (200 OK):**
-```json
-{
-  "ciphertext": "..."
-}
-```
-
-### 5.3 `GET /inbox/{alias}`
-Lists active boxes for the authenticated DID.
-
-**Response (200 OK):**
-```json
-{
-  "alias": "project-alpha",
-  "items": [
-    {
-      "id": "uuid-v4-string",
-      "sizeBytes": 1024,
-      "expiresAt": "2026-05-12T13:00:00Z"
-    }
-  ]
-}
-```
+### 4.4 `POST /extend/{id}`
+Adds time to an existing lease.
+- **Body**: `{ additionalHours }`
+- **Payment**: Required (x402).
 
 ---
 
-## 6. Conformance & Testing
+## 5. Metadata Privacy (The Shadow)
 
-Implementations are protocol-compliant if they pass the reference test suite:
-1. **Economic Integrity**: Correct 402 rejection and Satoshi calculation.
-2. **Cryptographic Isolation**: No cross-alias inbox leakage.
-3. **Temporal Persistence**: Immediate 410 response upon expiry.
-4. **Sovereign Access**: Proper DID-based authorization enforcement.
+Inboxes are isolated via **Salted DID Hashing**. The server never stores raw recipient DIDs in the lookup index.
+`Inbox_ID = SHA256(Recipient_DID + Alias + Service_Salt)`
 
 ---
 
-**Version:** 0.1.0  
-**Status:** Working Draft  
-**Reference Implementation:** [src/index.ts](src/index.ts)
+## 6. Conformance
+
+Implementations MUST pass the conformance suite in `packages/server/src/__tests__`.
+
+---
+**Version:** 0.2.0  
+**Status:** Alpha Draft

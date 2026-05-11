@@ -1,54 +1,50 @@
-# didbox402
+# didbox402 Monorepo
 
 **"A vending machine for privacy."**
 
-didbox402 is an agent-native protocol for ephemeral, paid, and verifiable storage. It allows autonomous software entities (agents, LLMs) to lease temporary storage "boxes" using only Decentralized Identifiers (DIDs) and micropayments.
+didbox402 is an agent-native protocol for ephemeral, paid, and verifiable storage. This repository is organized as a modular monorepo using `npm workspaces`.
 
-## Core Features
-- **Ephemeral:** Storage is a lease. Data disappears automatically when it expires.
-- **Paid (x402):** Dynamic pricing based on size and duration (Lightning Network/Satoshis).
-- **Verifiable:** DID-based authentication (X-DID + X-DID-Signature).
-- **Private:** Salted DID hashes protect the social graph (Inboxes).
-- **Multi-Inbox:** Organize data by projects, priorities, or groups.
+## Repository Structure
 
-## Quick Start (Local Prototype)
+- **`packages/server`**: The reference didbox402 node implementation (Cloudflare Workers + R2 + D1).
+- **`packages/sdk-core`**: The core HTTP protocol client for agents.
+- **`packages/sdk-crypto`**: Cryptographic utilities for Ed25519 `did:key` identity and request signing.
+- **`packages/sdk-payments`**: x402 payment negotiation and Lightning Network integration logic.
+
+## Core Features (v0.2.0)
+- **Cryptographic Sovereignty:** Real Ed25519 EdDSA signature verification with strict Request-Hash binding.
+- **Automated Economics:** Full 402 Payment Required challenge-response handshake with automated SDK negotiation.
+- **Private Inboxes:** Salted DID hashing for project-scoped privacy and isolation.
+- **Stateless & Scalable:** Edge-native, hands-off scaling via Cloudflare primitives.
+
+## Quick Start (v0.2.0)
 
 ### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Initialize Database
+### 2. Run the Conformance Tests
+This verifies the cryptography and payment handshakes across all packages.
 ```bash
-npx wrangler d1 execute didbox402-db --file=./schema.sql --local
+npm test
 ```
 
-### 3. Run the Server
+### 3. Run the Reference Node (Local)
 ```bash
-npm run dev
+cd packages/server
+npx wrangler dev
 ```
 
-### 4. Run the Client Demo
+### 4. Run the SDK Integration Demo
 In a new terminal:
 ```bash
-npx ts-node scripts/client.ts
+npx ts-node scripts/demo.ts
 ```
 
 ## Documentation
-The complete technical specification and design philosophy are available in the `docs/` directory.
-
-To view the docs in your browser:
-```bash
-python3 -m http.server 8080 --directory docs
-```
-Then visit [http://localhost:8080](http://localhost:8080).
-
-## Project Structure
-- `src/index.ts`: The main Hono edge server.
-- `src/lib/`: Core logic for pricing and D1/R2 storage.
-- `src/middleware/`: DID authentication and signature verification.
-- `docs/`: Architectural documentation and threat model.
-- `scripts/`: Client examples and demo scripts.
+The complete technical specification is in **[PROTOCOL.md](PROTOCOL.md)**.
+Extended architectural docs are available in **`docs/`**.
 
 ## License
 Open Core - Built at [adaptivefrontier.org](https://adaptivefrontier.org).
