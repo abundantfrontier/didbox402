@@ -1,17 +1,14 @@
 {
-  "name": "didbox402",
-  "version": "0.1.0",
+  "name": "didbox-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "wrangler dev src/index.ts",
-    "deploy": "wrangler deploy --minify src/index.ts",
-    "test": "vitest"
-  },
-  "dependencies": {
-    "hono": "^4.0.0"
+    "test": "npm test --workspaces",
+    "dev": "npm run dev --workspace=@didbox/server"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240502.0",
-    "@cloudflare/vitest-pool-workers": "^0.4.0",
     "vitest": "^1.5.0",
     "wrangler": "^3.53.1"
   }

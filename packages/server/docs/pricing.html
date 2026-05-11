@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 | Dynamic Pricing</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
+        .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
+        pre code, .assertion code, .mitigation code, .scaling-box code, .math code { 
+            background: transparent !important; 
+            color: inherit !important; 
+            padding: 0 !important;
+        }
+        .math {
+            background: #1e1e1e !important; 
+            color: #4ec9b0 !important; 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid #000;
+            font-family: 'SFMono-Regular', Consolas, monospace !important;
+        }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        pre { background: #1e1e1e; color: #74c476; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 1.1rem; border: 1px solid #333; text-align: center; font-family: monospace; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
+        h1 { color: #000; margin-top: 0; }
+        h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        .rail-box { background: #fffbe6; border: 1px solid #ffe58f; padding: 15px; border-radius: 4px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Index</a>
+        <h1>The Economics: Dynamic Pricing</h1>
+
+        <p>Storage on the edge is a finite resource. didbox402 uses a predictable pricing model to ensure the service pays for its own infrastructure while remaining accessible.</p>
+
+        <h2>Pricing Formula</h2>
+        <p>The cost is calculated based on volume (bytes) and duration (hours), with a <strong>1MB minimum charge</strong> to cover indexing and D1 overhead.</p>
+        
+        <div class="math">
+            Total Cost = Math.max(1MB, Size) * Hours * Base_Rate
+        </div>
+
+        <ul>
+            <li><strong>Base_Rate:</strong> Configured by the node operator (e.g., 100 Satoshis per MB-Hour).</li>
+            <li><strong>Currency:</strong> Satoshis (via the <strong>Lightning Network</strong>).</li>
+            <li><strong>Minimum Charge:</strong> 1 MB-Hour.</li>
+            <li><strong>Maximum Duration:</strong> 8,760 Hours (1 Year).</li>
+        </ul>
+
+        <div class="rail-box">
+            <strong>The x402 Rail:</strong> For the MVP, we use the <strong>Lightning Network</strong>. The <code>X-Payment</code> header contains a simple preimage proof of a settled BOLT11 invoice.
+        </div>
+
+        <h2>Payment Specification</h2>
+        <p>didbox402 nodes act as <strong>Lightning Service Providers (LSPs)</strong>. The payment flow follows the 402 standard:</p>
+        
+        <ol>
+            <li><strong>Discovery:</strong> Client sends a request without a payment header.</li>
+            <li><strong>Challenge:</strong> Server responds with <code>402 Payment Required</code> and an <code>X-Invoice</code> header.</li>
+            <li><strong>Settlement:</strong> Client pays the invoice via their Lightning node.</li>
+            <li><strong>Proof:</strong> Client retries with <code>X-Payment: {preimage}</code>.</li>
+        </ol>
+
+        <h2>Egress-Aware Pricing</h2>
+        <p>On infrastructure that charges for bandwidth (e.g., AWS S3), the node may require a <strong>Pay-to-Download</strong> x402 payment matching the object's size multiplied by the provider's egress rate.</p>
+    </div>
+</body>
+</html>

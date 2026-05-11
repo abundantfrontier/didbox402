@@ -2,28 +2,34 @@
 
 All notable changes to the **didbox402** protocol and reference implementation will be documented in this file.
 
+## [0.2.0] - 2026-05-11
+
+### Added
+- **Modular Monorepo:** Transitioned to an `npm workspaces` structure with discrete packages:
+  - `@didbox/server`: The Cloudflare edge node.
+  - `@didbox/sdk-core`: The base HTTP protocol client.
+  - `@didbox/sdk-crypto`: Real Ed25519 `did:key` signature and key management utilities.
+  - `@didbox/sdk-payments`: Automated x402 payment negotiation and Lightning simulation.
+- **Cryptographic Hardening:** Replaced mock signatures with real **Ed25519 EdDSA** verification.
+- **Strict Signature Binding:** Enforced `Hash(Method + Path + Body_Hash)` on all requests for tamper and replay protection.
+- **x402 Handshake:** Implemented the full `402 Payment Required` challenge-response loop (X-Invoice/X-Payment).
+- **Automated SDK Negotiation:** The `DidBoxClient` now handles 402 challenges autonomously when `autoPay` is enabled.
+- **Local Dev Mode:** Added a configurable bypass for payment verification to ensure fast local development.
+
+### Changed
+- Refactored server routes to support pre-consumed body streams from authentication middleware.
+- Simplified `did:key` parsing to focus on Ed25519 (z6Mk) for the v0.2.0 release.
+
+### Fixed
+- Fixed critical snake_case vs camelCase mismatch in D1 storage record authorization.
+- Corrected SHA-512 integration for `@noble/ed25519` v3 compatibility.
+
 ## [0.1.0] - 2026-05-11
 
 ### Added
-- **Formal Protocol Specification:** Created `PROTOCOL.md` at root with design goals, non-goals, and concrete API examples.
-- **High-Contrast Documentation:** A 10-page browser-friendly HTML suite in `docs/` with unified CSS and "Code Console" styling.
-- **TypeScript Client Library:** Added `src/client-lib.ts` to simplify agent integration (store, retrieve, extend, inbox).
-- **Automated Conformance Suite:** Implemented `src/__tests__/index.test.ts` using Vitest to verify protocol honesty.
-- **Multi-Inbox Support:** Named inboxes with salted hashing for project-scoped privacy and isolation.
-- **Dynamic x402 Pricing:** Deterministic pricing for storage (MB-hour) and egress (retrieval bandwidth).
-- **The Janitor:** Added automatic garbage collection for expired storage boxes.
-- **Quick Start:** Added a comprehensive root `README.md` and security-focused `.gitignore`.
-
-### Changed
-- Refactored internal storage helpers to use consistent snake_case for D1 compatibility.
-- Updated pricing logic to enforce a 1MB minimum charge.
-- Unified visual identity across all documentation pages.
-
-### Fixed
-- Resolved CSS bleed-through issues in dark console blocks.
-- Fixed 404 links in the documentation index.
-- Corrected authorization logic for scoped inbox retrieval.
+- Initial protocol specification and Hono-based prototype.
+- High-contrast documentation and multi-inbox support.
 
 ---
-**Version:** 0.1.0  
-**Status:** Initial Milestone (Working Draft)
+**Version:** 0.2.0  
+**Status:** Alpha Milestone (Secure Prototype)

@@ -1,0 +1,8 @@
+{
+  "name": "@didbox/sdk-core",
+  "version": "0.2.0",
+  "main": "src/index.ts",
+  "dependencies": {
+    "hono": "^4.0.0"
+  }
+}
