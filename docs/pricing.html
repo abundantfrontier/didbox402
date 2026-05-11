@@ -26,10 +26,15 @@
     </div>
 
     <ul>
-        <li><strong>Base_Rate:</strong> Configured in <code>wrangler.toml</code> (e.g., 0.0001 USD equivalent in Satoshis).</li>
+        <li><strong>Base_Rate:</strong> Configured in <code>wrangler.toml</code> (e.g., 100 Satoshis per MB-Hour).</li>
+        <li><strong>Currency:</strong> Satoshis (via the <strong>Lightning Network</strong>).</li>
         <li><strong>Minimum Duration:</strong> 1 Hour.</li>
         <li><strong>Maximum Duration:</strong> 8,760 Hours (1 Year).</li>
     </ul>
+
+    <div style="background: #fffbe6; border: 1px solid #ffe58f; padding: 15px; border-radius: 4px; margin: 20px 0;">
+        <strong>The x402 Rail:</strong> For the MVP, we use the <strong>Lightning Network</strong>. The <code>X-Payment</code> header contains an LSAT (Lightning Service Authentication Token) or a simple preimage proof of a settled invoice.
+    </div>
 
     <h2>The "Edge" of the Handshake</h2>
     <p>The <code>paymentMiddleware</code> needs to know the price *before* it allows the request through. Since <code>didbox402</code> price is dynamic based on the body, we follow this sequence:</p>

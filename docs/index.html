@@ -48,8 +48,16 @@
                     <p>How we balance discoverability (Inbox) with metadata privacy.</p>
                 </li>
                 <li>
+                    <a href="inboxes.html">The Hub: Multi-Inbox</a>
+                    <p>Named inboxes for projects, groups, and priorities.</p>
+                </li>
+                <li>
                     <a href="multi-cloud.html">The Horizon: Multi-Cloud</a>
                     <p>Future-proofing for AWS, GCP, and the complexity of egress economics.</p>
+                </li>
+                <li>
+                    <a href="threat-model.html">The Shield: Threat Model</a>
+                    <p>Metadata leakage, provider trust, and the limits of privacy.</p>
                 </li>
             </ul>
         </nav>
@@ -62,6 +70,15 @@
         <div class="server-tip">
             <strong>Viewing Tip:</strong> If links are blocked locally, run <code>python3 -m http.server 8080 --directory docs</code> and open <code>http://localhost:8080</code>.
         </div>
+
+        <section style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            <h2>Prototype Ready</h2>
+            <p>A working reference implementation is now available in the <code>src/</code> directory.</p>
+            <ul>
+                <li><code>src/index.ts</code>: The Hono Edge Server.</li>
+                <li><code>scripts/client.ts</code>: An end-to-end client demo (Store → Inbox → Retrieve → Extend).</li>
+            </ul>
+        </section>
     </main>
 </body>
 </html>
