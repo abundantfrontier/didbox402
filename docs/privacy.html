@@ -5,47 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>didbox402 | Privacy & Metadata</title>
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
+        .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        pre { background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 8px; overflow-x: auto; }
-        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; }
-        .privacy-box { border: 2px dashed #ff4d4f; padding: 15px; background: #fff1f0; border-radius: 8px; }
+        pre code { background: transparent !important; padding: 0; color: inherit !important; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #333; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
+        .privacy-box { border: 2px dashed #ff4d4f; padding: 15px; background: #fff1f0; border-radius: 8px; margin: 20px 0; }
+        h1 { color: #000; margin-top: 0; }
+        h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
     </style>
 </head>
 <body>
-    <a href="index.html" class="back-link">← Index</a>
-    <h1>The Shadow: Privacy & Metadata</h1>
+    <div class="container">
+        <a href="index.html" class="back-link">← Index</a>
+        <h1>The Shadow: Privacy & Metadata</h1>
 
-    <p>Even if the payload is encrypted, <strong>metadata is a signal</strong>. Knowing who is talking to whom is often enough to compromise agent security.</p>
+        <p>Even if the payload is encrypted, <strong>metadata is a signal</strong>. Knowing who is talking to whom is often enough to compromise agent security.</p>
 
-    <div class="privacy-box">
-        <strong>The Problem:</strong> If we store <code>recipient_did</code> as a string, any administrator can see the entire communication graph.
+        <div class="privacy-box">
+            <strong>The Problem:</strong> If we store <code>recipient_did</code> as a string, any administrator can see the entire communication graph.
+        </div>
+
+        <h2>The Solution: Salted DID Hashing</h2>
+        <p>Instead of searching by raw DID, the server uses a salted hash to identify owners and inboxes.</p>
+        
+        <pre>Identity_Hash = SHA256(Recipient_DID + Alias + Service_Salt)</pre>
+
+        <ul>
+            <li><strong>Recipient_DID:</strong> The public identifier of the recipient.</li>
+            <li><strong>Alias:</strong> The specific inbox (defaults to <code>"default"</code>).</li>
+            <li><strong>Service_Salt:</strong> A secret key known only to the didbox402 instance.</li>
+        </ul>
+
+        <h2>Pseudonymity Properties</h2>
+        <ol>
+            <li>The server doesn't know who the recipient is (unless they already have the DID and salt to test against).</li>
+            <li>Recipients check their inboxes by providing their DID. The server computes the hash and returns matches.</li>
+            <li>Observers cannot link different storage boxes to the same recipient without knowing the salt and alias combinations.</li>
+        </ol>
+
+        <h2>Metadata Retention</h2>
+        <p>The D1 database only retains: <code>storage_id</code>, <code>owner_hash</code>, <code>recipient_hash</code>, <code>size_bytes</code>, and <code>expires_at</code>.</p>
     </div>
-
-    <h2>The Solution: Hashed Inboxes</h2>
-    <p>Instead of searching by raw DID, we search by an <strong>Inbox ID</strong>.</p>
-    
-    <pre>Inbox_ID = SHA256(Recipient_DID + Service_Salt)</pre>
-
-    <ul>
-        <li><strong>Recipient_DID:</strong> The public identifier of the recipient.</li>
-        <li><strong>Service_Salt:</strong> A secret key known only to the didbox402 instance.</li>
-    </ul>
-
-    <h2>The "Edge" of Discoverability</h2>
-    <p>This approach provides <strong>Pseudonymity</strong>:</p>
-    <ol>
-        <li>The server doesn't know who the recipient is (unless they already know the DID).</li>
-        <li>The recipient can check their inbox by sending their DID. The server computes the hash and returns matching records.</li>
-    </ol>
-
-    <h2>Metadata retained in D1:</h2>
-    <ul>
-        <li><code>storage_id</code> (UUID)</li>
-        <li><code>owner_hash</code> (Hashed DID)</li>
-        <li><code>recipient_hash</code> (Hashed DID)</li>
-        <li><code>size_bytes</code></li>
-        <li><code>expires_at</code></li>
-    </ul>
 </body>
 </html>

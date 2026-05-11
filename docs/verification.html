@@ -5,28 +5,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>didbox402 | Verification & Conformance</title>
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        body { 
+            font-family: -apple-system, system-ui, sans-serif; 
+            line-height: 1.6; 
+            color: #111; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 40px 20px; 
+            background: #f0f2f5; 
+        }
+        .container {
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-top: 8px solid #007aff;
+        }
         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        pre { background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; }
-        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; }
-        .test-case { border-bottom: 1px solid #eee; padding: 20px 0; }
-        .test-case h3 { margin-top: 0; color: #28a745; }
+        pre code { background: transparent !important; padding: 0; color: inherit !important; }
+        pre, .assertion { 
+            background: #1e1e1e !important; 
+            color: #4ec9b0 !important; 
+            padding: 20px; 
+            border-radius: 8px; 
+            overflow-x: auto; 
+            font-size: 0.9rem;
+            border: 1px solid #000;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            margin: 20px 0;
+            display: block;
+        }
+        h1 { color: #000; margin-top: 0; }
+        h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
+        .test-case { margin-bottom: 40px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .test-case:last-child { border-bottom: none; }
+        .test-case h3 { color: #1e7e34; margin-bottom: 10px; }
         .optional h3 { color: #856404; }
-        .assertion { background: #f6ffed; border: 1px solid #b7eb8f; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <a href="index.html" class="back-link">← Index</a>
-    <h1>The Proof: Verification & Conformance</h1>
+    <div class="container">
+        <a href="index.html" class="back-link">← Back to Index</a>
+        <h1>The Proof: Verification & Conformance</h1>
+        <p>A protocol is only as good as its verification. This document defines the conformance test cases that any <code>didbox402</code> implementation must pass to be considered compliant.</p>
 
-    <p>A protocol is only as good as its verification. This document defines the conformance test cases that any <code>didbox402</code> implementation must pass to be considered compliant, allowing agents to automatically verify provider honesty.</p>
+        <h2>Mandatory Core Tests</h2>
 
-    <h2>Mandatory Core Tests</h2>
-
-    <div class="test-case">
-        <h3>1. Economic Integrity (Pricing)</h3>
-        <p><strong>Goal:</strong> Ensure the server calculates pricing exactly as specified in the formula, refusing service without payment.</p>
-        <p><strong>Verification:</strong> Send a <code>POST /store</code> request with a known size and duration but omit the <code>X-Payment</code> header.</p>
+        <div class="test-case">
+            <h3>1. Economic Integrity (Pricing)</h3>
+            <p><strong>Goal:</strong> Ensure the server calculates pricing exactly as specified in the formula, refusing service without payment.</p>
+            <p><strong>Verification:</strong> Send a <code>POST /store</code> request with a known size and duration but omit the <code>X-Payment</code> header.</p>
 <pre><code>POST /store HTTP/1.1
 X-DID: did:key:z6Mkp...
 X-DID-Signature: mock_sig
@@ -35,87 +64,79 @@ X-DID-Signature: mock_sig
   "ciphertext": "hello world",
   "durationHours": 1
 }</code></pre>
-        <p><strong>Expected Response:</strong></p>
+            <p><strong>Expected Response:</strong></p>
 <pre><code>HTTP/1.1 402 Payment Required
 {
   "error": "Payment Required",
   "amount_satoshis": 100
 }</code></pre>
-        <div class="assertion">EXPECT(resp.amount_satoshis).TO_EQUAL(Math.ceil((size_mb * duration_hours) * base_rate))</div>
-    </div>
+            <div class="assertion">EXPECT(resp.amount_satoshis).TO_EQUAL(Math.ceil((size_mb * duration_hours) * base_rate))</div>
+        </div>
 
-    <div class="test-case">
-        <h3>2. Cryptographic Isolation (Inboxes)</h3>
-        <p><strong>Goal:</strong> Prove that knowing one inbox alias reveals nothing about another, even for the same DID.</p>
-        <p><strong>Verification:</strong> Store an item in <code>alias-a</code>. Then, query <code>GET /inbox/alias-b</code>.</p>
+        <div class="test-case">
+            <h3>2. Cryptographic Isolation (Inboxes)</h3>
+            <p><strong>Goal:</strong> Prove that knowing one inbox alias reveals nothing about another, even for the same DID.</p>
+            <p><strong>Verification:</strong> Store an item in <code>alias-a</code>. Then, query <code>GET /inbox/alias-b</code>.</p>
 <pre><code>GET /inbox/alias-b HTTP/1.1
 X-DID: did:key:z6Mkp...
 X-DID-Signature: mock_sig</code></pre>
-        <p><strong>Expected Response:</strong></p>
+            <p><strong>Expected Response:</strong></p>
 <pre><code>HTTP/1.1 200 OK
 {
   "alias": "alias-b",
   "items": []
 }</code></pre>
-        <div class="assertion">EXPECT(GET("/inbox/alias-b").items).TO_BE_EMPTY()</div>
-    </div>
+            <div class="assertion">EXPECT(GET("/inbox/alias-b").items).TO_BE_EMPTY()</div>
+        </div>
 
-    <div class="test-case">
-        <h3>3. Temporal Persistence (Expiration)</h3>
-        <p><strong>Goal:</strong> Confirm that data is unreachable precisely after the leased time expires.</p>
-        <p><strong>Verification:</strong> Store an item with <code>durationHours: -1</code> (or wait for natural expiration). Attempt <code>GET /retrieve/{id}</code>.</p>
+        <div class="test-case">
+            <h3>3. Temporal Persistence (Expiration)</h3>
+            <p><strong>Goal:</strong> Confirm that data is unreachable precisely after the leased time expires.</p>
+            <p><strong>Verification:</strong> Store an item with <code>durationHours: -1</code> (or wait for natural expiration). Attempt <code>GET /retrieve/{id}</code>.</p>
 <pre><code>GET /retrieve/uuid-1234 HTTP/1.1
 X-DID: did:key:z6Mkp...
 X-DID-Signature: mock_sig</code></pre>
-        <p><strong>Expected Response:</strong></p>
+            <p><strong>Expected Response:</strong></p>
 <pre><code>HTTP/1.1 410 Gone
 {
   "error": "Expired"
 }</code></pre>
-        <div class="assertion">EXPECT(GET("/retrieve/id").status).TO_EQUAL(410)</div>
-    </div>
+            <div class="assertion">EXPECT(GET("/retrieve/id").status).TO_EQUAL(410)</div>
+        </div>
 
-    <div class="test-case">
-        <h3>4. Sovereign Access (Authorization)</h3>
-        <p><strong>Goal:</strong> Ensure only the owner or intended recipient can retrieve data.</p>
-        <p><strong>Verification:</strong> Attempt to retrieve an object using a DID that is neither the owner nor the recipient.</p>
+        <div class="test-case">
+            <h3>4. Sovereign Access (Authorization)</h3>
+            <p><strong>Goal:</strong> Ensure only the owner or intended recipient can retrieve data.</p>
+            <p><strong>Verification:</strong> Attempt to retrieve an object using a DID that is neither the owner nor the recipient.</p>
 <pre><code>GET /retrieve/uuid-1234 HTTP/1.1
 X-DID: did:key:zEvil...
 X-DID-Signature: evil_sig</code></pre>
-        <p><strong>Expected Response:</strong></p>
+            <p><strong>Expected Response:</strong></p>
 <pre><code>HTTP/1.1 403 Forbidden
 {
   "error": "Unauthorized"
 }</code></pre>
-        <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID": "evil-did"}).status).TO_EQUAL(403)</div>
+            <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID": "evil-did"}).status).TO_EQUAL(403)</div>
+        </div>
+
+        <h2>Recommended Tests</h2>
+
+        <div class="test-case optional">
+            <h3>5. Replay Protection (Signature Binding)</h3>
+            <p><strong>Goal:</strong> Ensure an attacker cannot replay a valid signature on a modified request.</p>
+            <p><strong>Verification:</strong> Intercept a valid <code>POST /store</code> request and alter the <code>durationHours</code>. Resubmit the request.</p>
+            <div class="assertion">EXPECT(res.status).TO_EQUAL(401) // Signature invalid for modified body</div>
+        </div>
+
+        <h2>Running the Reference Suite</h2>
+        <p>The <code>didbox402</code> repository includes a complete reference test suite implementing the mandatory core checks.</p>
+
+        <div class="assertion">
+            # The reference suite is located at:<br>
+            <strong>src/__tests__/index.test.ts</strong><br><br>
+            # Run all conformance tests locally:<br>
+            npm test
+        </div>
     </div>
-
-    <h2>Recommended Tests</h2>
-
-    <div class="test-case optional">
-        <h3>5. Replay Protection (Signature Binding)</h3>
-        <p><strong>Goal:</strong> Ensure an attacker cannot replay a valid signature on a modified request.</p>
-        <p><strong>Verification:</strong> Intercept a valid <code>POST /store</code> request and alter the <code>durationHours</code>. Resubmit the request.</p>
-        <p><strong>Expected Response:</strong> <code>401 Unauthorized</code> (Signature mismatch).</p>
-    </div>
-
-    <div class="test-case optional">
-        <h3>6. Egress Asymmetry (Multi-Cloud)</h3>
-        <p><strong>Goal:</strong> On infrastructure like AWS/GCP, ensure retrieval incurs dynamic x402 cost.</p>
-        <p><strong>Verification:</strong> Call <code>GET /retrieve/{id}</code> on a non-Cloudflare node without <code>X-Payment</code>.</p>
-        <p><strong>Expected Response:</strong> <code>402 Payment Required</code> with calculated egress Satoshis.</p>
-    </div>
-
-    <h2>Running the Reference Suite</h2>
-    <p>The <code>didbox402</code> repository includes a complete reference test suite implementing the mandatory core checks against a simulated edge environment.</p>
-
-    <div class="assertion">
-        # The reference suite is located at:<br>
-        <strong>src/__tests__/index.test.ts</strong><br><br>
-        # Run all conformance tests locally:<br>
-        npm test
-    </div>
-
-    <p>Developers implementing the protocol on other clouds or language runtimes should mirror these test cases to ensure cross-node compatibility and agent trust.</p>
 </body>
 </html>

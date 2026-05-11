@@ -5,52 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>didbox402 | Multi-Cloud & Egress</title>
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
+        .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
         .cloud-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
         .cloud-card { border: 1px solid #eee; padding: 15px; border-radius: 8px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .warning { background: #fff1f0; border: 1px solid #ffa39e; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .warning { background: #fff1f0; border: 1px solid #ffa39e; padding: 15px; border-radius: 4px; margin: 20px 0; font-weight: bold; color: #b21f2d; }
+        h1 { color: #000; margin-top: 0; }
+        h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
     </style>
 </head>
 <body>
-    <a href="index.html" class="back-link">← Index</a>
-    <h1>The Horizon: Multi-Cloud & Egress Economics</h1>
+    <div class="container">
+        <a href="index.html" class="back-link">← Index</a>
+        <h1>The Horizon: Multi-Cloud & Egress Economics</h1>
 
-    <p>While the MVP is built on Cloudflare, the <strong>didbox402 protocol</strong> is cloud-agnostic. To support true decentralization and agent autonomy, the infrastructure must be portable across major cloud providers.</p>
+        <p>While the MVP is built on Cloudflare, the <strong>didbox402 protocol</strong> is cloud-agnostic. To support true decentralization, the infrastructure must be portable across major cloud providers.</p>
 
-    <h2>The Egress Challenge</h2>
-    <p>Cloudflare R2 is unique in its zero-egress model. Moving to AWS (S3), GCP (GCS), or Azure (Blob) introduces <strong>bandwidth costs</strong> that can exceed the cost of storage itself.</p>
+        <h2>The Egress Challenge</h2>
+        <p>Cloudflare R2 is unique in its zero-egress model. Moving to AWS (S3), GCP (GCS), or Azure introduces bandwidth costs that can exceed the cost of storage.</p>
 
-    <div class="warning">
-        <strong>The Edge Observation:</strong> On traditional clouds, "Retrieve" is more expensive than "Store."
-    </div>
-
-    <div class="cloud-grid">
-        <div class="cloud-card">
-            <h3>Cloudflare (R2)</h3>
-            <p><strong>Pricing:</strong> Purely duration + size.</p>
-            <p><strong>Advantage:</strong> Symmetrical costs. High frequency agent-to-agent talk is cheap.</p>
+        <div class="warning">
+            The Edge Observation: On traditional clouds, "Retrieve" is more expensive than "Store."
         </div>
-        <div class="cloud-card">
-            <h3>Standard Cloud (S3/GCS)</h3>
-            <p><strong>Pricing:</strong> Storage + <em>High Egress</em>.</p>
-            <p><strong>Protocol Shift:</strong> Retrieval must be paid (x402) per download to cover bandwidth.</p>
+
+        <div class="cloud-grid">
+            <div class="cloud-card">
+                <h3>Cloudflare (R2)</h3>
+                <p><strong>Pricing:</strong> Purely duration + size.</p>
+                <p><strong>Advantage:</strong> Symmetrical costs. High frequency agent talk is cheap.</p>
+            </div>
+            <div class="cloud-card">
+                <h3>Standard Cloud (S3/GCS)</h3>
+                <p><strong>Pricing:</strong> Storage + High Egress.</p>
+                <p><strong>Protocol Shift:</strong> Retrieval must be paid (x402) per download to cover bandwidth.</p>
+            </div>
         </div>
+
+        <h2>Adaptive Pricing</h2>
+        <p>To support multi-cloud, the node operator configures <strong>Inbound (Store)</strong> and <strong>Outbound (Retrieve)</strong> rates independently. This ensures nodes on traditional clouds remain sustainable.</p>
+
+        <h2>Portability Strategy</h2>
+        <ol>
+            <li><strong>S3 Compatibility:</strong> Use S3-compatible APIs for blob operations.</li>
+            <li><strong>Relational Metadata:</strong> Use SQL (Postgres/MySQL) for lease metadata.</li>
+            <li><strong>Compute:</strong> Hono runs on Node.js, Deno, and Bun for easy cross-cloud deployment.</li>
+        </ol>
     </div>
-
-    <h2>Adaptive Pricing Model</h2>
-    <p>To support multi-cloud, the <code>calculatePrice</code> logic must be modular:</p>
-    <ul>
-        <li><strong>Inbound (Store):</strong> Covers the cost of disk space for the lease duration.</li>
-        <li><strong>Outbound (Retrieve):</strong> Covers the provider's egress tax. In the MVP, this is 0. In AWS/GCP nodes, this becomes a required x402 payment for the <code>GET</code> request.</li>
-    </ul>
-
-    <h2>Portability Strategy</h2>
-    <ol>
-        <li><strong>Abstraction Layer:</strong> Use the S3-compatible API for all blob operations.</li>
-        <li><strong>Metadata Agnosticism:</strong> While we use D1 (SQLite), any relational DB (Postgres/RDS) can store the lease metadata.</li>
-        <li><strong>Compute Portability:</strong> Hono runs on Node.js, Deno, and Bun, making it easy to deploy on Lambda, Fly.io, or Google Cloud Run.</li>
-    </ol>
 </body>
 </html>
