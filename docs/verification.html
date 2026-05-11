@@ -47,7 +47,21 @@
         <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID": "evil-did"}).status).TO_EQUAL(403)</div>
     </div>
 
-    <h2>Running the Suite</h2>
-    <p>We provide a reference test suite in the <code>src/__tests__</code> directory. For the Cloudflare MVP, we use <code>vitest</code> and <code>miniflare</code> to simulate the edge environment.</p>
+    <h2>Reference Implementation Tests</h2>
+    <p>The <code>didbox402</code> repository includes a complete reference test suite that implements these conformance checks using <strong>Vitest</strong> and <strong>Cloudflare Workers Vitest Pool</strong>.</p>
+
+    <div class="assertion">
+        # Run all conformance tests<br>
+        npm test
+    </div>
+
+    <h3>Coverage Summary</h3>
+    <ul>
+        <li><strong>Unit Tests:</strong> Pricing logic (MB-hour accuracy), DID hashing, and storage helpers.</li>
+        <li><strong>Integration Tests:</strong> Full HTTP request/response cycles against a simulated edge environment (Miniflare).</li>
+        <li><strong>Economic Tests:</strong> Verification of 402 rejections and correct Satoshi calculations.</li>
+    </ul>
+
+    <p>Developers implementing the protocol on other clouds (AWS/GCP) should mirror these test cases to ensure cross-node compatibility and agent trust.</p>
 </body>
 </html>
