@@ -21,9 +21,8 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             border-top: 8px solid #007aff;
         }
-        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        pre code { background: transparent !important; padding: 0; color: inherit !important; }
-        pre, .assertion { 
+        /* The "Console" Theme - Force High Contrast */
+        pre, .assertion, .mitigation, .scaling-box { 
             background: #1e1e1e !important; 
             color: #4ec9b0 !important; 
             padding: 20px; 
@@ -31,10 +30,19 @@
             overflow-x: auto; 
             font-size: 0.9rem;
             border: 1px solid #000;
-            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-family: 'SFMono-Regular', Consolas, monospace !important;
             margin: 20px 0;
             display: block;
         }
+        /* Ensure ALL nested code tags in dark blocks are transparent */
+        pre code, .assertion code, .mitigation code, .scaling-box code {
+            background: transparent !important;
+            color: inherit !important;
+            padding: 0 !important;
+            border: none !important;
+        }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        
         h1 { color: #000; margin-top: 0; }
         h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
         .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
@@ -117,15 +125,6 @@ X-DID-Signature: evil_sig</code></pre>
   "error": "Unauthorized"
 }</code></pre>
             <div class="assertion">EXPECT(GET("/retrieve/id", headers={"X-DID": "evil-did"}).status).TO_EQUAL(403)</div>
-        </div>
-
-        <h2>Recommended Tests</h2>
-
-        <div class="test-case optional">
-            <h3>5. Replay Protection (Signature Binding)</h3>
-            <p><strong>Goal:</strong> Ensure an attacker cannot replay a valid signature on a modified request.</p>
-            <p><strong>Verification:</strong> Intercept a valid <code>POST /store</code> request and alter the <code>durationHours</code>. Resubmit the request.</p>
-            <div class="assertion">EXPECT(res.status).TO_EQUAL(401) // Signature invalid for modified body</div>
         </div>
 
         <h2>Running the Reference Suite</h2>
