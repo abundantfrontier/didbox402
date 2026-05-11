@@ -7,12 +7,23 @@
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
+        pre code, .assertion code, .mitigation code, .scaling-box code, .math code { 
+            background: transparent !important; 
+            color: inherit !important; 
+            padding: 0 !important;
+        }
+        .scaling-box {
+            background: #1e1e1e !important; 
+            color: #4ec9b0 !important; 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid #000;
+            font-family: 'SFMono-Regular', Consolas, monospace !important;
+        }
         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        pre code, .scaling-box code { background: transparent !important; padding: 0; color: inherit !important; }
         .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
         .principle-card { border: 1px solid #eee; padding: 20px; border-radius: 8px; margin-bottom: 20px; background: white; }
         .principle-card h3 { margin-top: 0; color: #0056b3; }
-        .scaling-box { background: #1e1e1e; border: 1px solid #333; color: #4ec9b0; font-weight: bold; padding: 20px; border-radius: 8px; margin: 20px 0; font-family: monospace; }
         h1 { color: #000; margin-top: 0; }
         h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
     </style>
