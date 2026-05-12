@@ -1,7 +1,9 @@
 {
   "name": "@didbox/conformance",
-  "version": "0.6.0",
+  "version": "0.6.1",
+  "description": "Protocol Conformance Suite for didbox402",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "didbox-conformance": "dist/cli.js"
   },
@@ -12,12 +14,13 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "echo 'Conformance suite is meant to be run by implementers'"
+    "test": "vitest run src/server",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "commander": "^12.0.0",
     "vitest": "^1.5.0",
-    "@didbox/sdk-core": "^0.6.0",
-    "@didbox/sdk-crypto": "^0.6.0"
+    "@didbox/sdk-core": "^0.6.1",
+    "@didbox/sdk-crypto": "^0.6.1"
   }
 }

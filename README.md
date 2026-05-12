@@ -6,7 +6,7 @@ didbox402 is an agent-native open protocol for ephemeral, paid, and verifiable s
 
 ---
 
-## Status: v0.6.0 (Unified Open Protocol)
+## Status: v0.6.1 (Production-Ready Open Protocol)
 
 This repository serves as the definitive specification and reference ecosystem for the didbox402 standard.
 
@@ -14,25 +14,26 @@ This repository serves as the definitive specification and reference ecosystem f
 - **Ephemeral Leases:** Storage is a time-bound lease. Data is automatically purged upon expiration.
 - **Dual-Rail Standards:** Native support for **L402 (Lightning)** and **x402 (Web3/USDC)** payments.
 - **Cryptographic Sovereignty:** Ed25519 authentication with strict temporal binding and replay protection.
-- **Absolute Privacy:** Mandatory salted hashing ensures identity data is never discoverable by node operators.
+- **Absolute Privacy:** Mandatory salted hashing ensures identity data is never discoverable.
 - **Infrastructure Agnostic:** Designed to run on Cloudflare, AWS, GCP, or Bare Metal.
 
 ---
 
 ## Protocol vs. Product
 **didbox402 is an open protocol.** This repository contains the standards and the reference implementation. 
-Commercial providers (such as **Omnibond**) build production services on top of this protocol, offering high-durability storage, enterprise compliance, and advanced agent toolkits.
+Commercial providers build production services on top of this protocol, offering high-durability storage, enterprise compliance, and advanced agent toolkits.
 
 ---
 
 ## Repository Structure
 - **`PROTOCOL.md`**: The official technical specification.
-- **`packages/conformance`**: The Protocol Conformance Suite for third-party implementers.
+- **`ROADMAP.md`**: The public project roadmap.
+- **`packages/conformance`**: The official Protocol Conformance CLI.
 - **`packages/server`**: The Cloudflare Workers reference node.
 - **`packages/sdk-*`**: Reusable TypeScript modules for agents and clients.
-- **`docs/`**: Implementer guides and architectural documentation.
+- **`docs/`**: Comprehensive implementer guides and architectural documentation.
 
-## Quick Start (v0.6.0)
+## Quick Start (v0.6.1)
 
 ### 1. Install Dependencies
 ```bash
@@ -40,9 +41,9 @@ npm install
 ```
 
 ### 2. Verify Compliance
-Run the testing gauntlet to verify protocol integrity:
+Run the official conformance suite:
 ```bash
-npm test --workspaces
+npx @didbox/conformance --help
 ```
 
 ### 3. Run the Reference Node
@@ -54,6 +55,7 @@ cd packages/server && npx wrangler dev
 - **[Implementer's Guide](docs/implementer-guide.html)**: Building your own compliant node.
 - **[Formal Specification](PROTOCOL.md)**: The definitive rulebook.
 - **[Extension Points](docs/extensions.html)**: How to customize and commercialize.
+- **[Threat Model](docs/threat-model.html)**: Security considerations and mitigations.
 
 ## License
 Open Core - Built at [adaptivefrontier.org](https://adaptivefrontier.org).

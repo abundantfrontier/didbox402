@@ -1,4 +1,4 @@
-# didbox402 Protocol Specification (v0.6.0)
+# didbox402 Protocol Specification (v0.6.1)
 
 **didbox402** is an agent-native open protocol for ephemeral, paid, and verifiable storage. It facilitates trustless data handoff between autonomous entities using Decentralized Identifiers (DIDs) and micropayments.
 
@@ -8,7 +8,7 @@
 
 This document defines the **didbox402 Protocol**. It specifies the mandatory rules for authentication, economics, and storage that any compliant implementation MUST follow.
 
-**Commercial products** (such as specialized hosting nodes or agent platforms) build on top of this protocol. Products MAY offer additional features (UI, dashboards, multi-chain rails) as long as they maintain compatibility with the core spec defined here.
+**Commercial products** build on top of this protocol. Products MAY offer additional features (UI, dashboards, multi-chain rails) as long as they maintain compatibility with the core spec defined here.
 
 ---
 
@@ -135,7 +135,9 @@ Features marked as DEPRECATED will be removed in the next Major version.
 
 ## 8. Conformance
 
-Implementations are considered compliant only if they pass the **Testing Gauntlet**:
+Implementations MUST pass the official **[didbox-conformance](packages/conformance)** suite.
+
+### 8.1 Verification Gauntlet
 1. **Economic Integrity:** Rejects without payment, enforces 1MB min charge.
 2. **Cryptographic Isolation:** No cross-alias inbox leakage.
 3. **Temporal Security:** Enforces ±5m drift window.
@@ -143,5 +145,5 @@ Implementations are considered compliant only if they pass the **Testing Gauntle
 5. **Privacy Invariant:** Zero raw DIDs in persistent storage.
 
 ---
-**Version:** 0.6.0  
+**Version:** 0.6.1  
 **Status:** Open Protocol Specification

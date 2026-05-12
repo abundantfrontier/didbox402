@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.6.0) | Implementer's Guide</title>
+    <title>didbox402 (v0.6.1) | Implementer's Guide</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -19,12 +19,15 @@
         h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
         h3 { color: #333; margin-top: 25px; }
         .note { background: #fff3cd; border-left: 5px solid #ffeeba; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .error-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .error-table th, .error-table td { border: 1px solid #eee; padding: 10px; text-align: left; }
+        .error-table th { background: #f9f9f9; }
     </style>
 </head>
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.6.0</span></h1>
+        <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.6.1</span></h1>
 
         <p>This guide provides a comprehensive technical blueprint for teams building <strong>didbox402-compatible</strong> servers or clients. It outlines the mandatory invariants required to claim protocol compliance.</p>
 
@@ -60,38 +63,6 @@
             <p>When a payment is required (Store/Extend), the server MUST return a <code>402</code> with the appropriate challenge headers:</p>
             <pre><code>WWW-Authenticate: L402 macaroon="...", invoice="..."
 PAYMENT-REQUIRED: {base64_requirements}</code></pre>
-
-            <h3>Storage Lifecycle</h3>
-            <ul>
-                <li><strong>Atomic Store:</strong> Data in R2/S3 must be consistent with metadata in D1/SQL.</li>
-                <li><strong>Expiration:</strong> Retrieval MUST be blocked as soon as <code>now > expires_at</code>.</li>
-                <li><strong>Physical Purge:</strong> A background process must physically delete blobs to prevent resource exhaustion.</li>
-            </ul>
-        </section>
-
-        <section id="client-implementation">
-            <h2>4. Implementing a Client</h2>
-            <h3>Key Management</h3>
-            <p>Clients are responsible for their own Ed25519 keys. The protocol expects standard <code>did:key</code> identifiers.</p>
-            
-            <h3>Handling 402 Challenges</h3>
-            <p>A compliant client SHOULD:</p>
-            <ol>
-                <li>Attempt a request without payment headers.</li>
-                <li>On 402, parse the <code>WWW-Authenticate</code> or <code>PAYMENT-REQUIRED</code> headers.</li>
-                <li>Settle the payment via a connected wallet (WebLN or EIP-1193).</li>
-                <li>Retry the request with <code>Authorization</code> or <code>PAYMENT-SIGNATURE</code>.</li>
-            </ol>
-        </section>
-
-        <section id="extension-points">
-            <h2>5. Extension Points</h2>
-            <p>Commercial providers can extend didbox402 at these points:</p>
-            <ul>
-                <li><strong>Payment Rails:</strong> Add support for Solana, Lightning Service Providers (LSPs), or custom credit systems.</li>
-                <li><strong>Storage Backends:</strong> Move from Cloudflare R2 to IPFS, Arweave, or enterprise-grade S3 clusters.</li>
-                <li><strong>Authorization:</strong> Implement Verifiable Credentials (VCs) for gated storage tiers.</li>
-            </ul>
         </section>
 
         <section id="practical-examples">
@@ -100,56 +71,115 @@ PAYMENT-REQUIRED: {base64_requirements}</code></pre>
             <h3>Example: Minimal Hono Server (Node.js)</h3>
             <p>This snippet demonstrates how to implement the core 402 challenge flow in a standard Node.js server using Hono.</p>
             <pre><code>import { Hono } from 'hono';
+import { sha256 } from '@noble/hashes/sha2';
 
 const app = new Hono();
 
 app.post('/store', async (c) => {
+  const did = c.req.header('X-DID');
+  const sig = c.req.header('X-DID-Signature');
   const paymentProof = c.req.header('Authorization'); // or PAYMENT-SIGNATURE
   
+  // 1. Check for payment
   if (!paymentProof) {
-    // Issue L402 Challenge
-    c.header('WWW-Authenticate', 'L402 macaroon="...", invoice="lnbc..."');
+    // Generate standard L402 challenge
+    const invoice = "lnbc100n1p..."; 
+    const macaroon = Buffer.from(JSON.stringify({ amount: 100 })).toString('base64');
+    
+    c.header('WWW-Authenticate', `L402 macaroon="${macaroon}", invoice="${invoice}"`);
     return c.json({ error: 'Payment Required', amount_satoshis: 100 }, 402);
   }
 
-  // 1. Verify DID Signature (Shield)
-  // 2. Verify Payment Proof (Rail)
-  // 3. Store Data (Engine)
+  // 2. Verify DID Signature and Payment (Logic implemented in middleware/lib)
+  // ...
   
   return c.json({ storageId: 'uuid-123' });
 });
 
 export default app;</code></pre>
 
-            <h3>Example: Manual Client-Side 402 Handling</h3>
-            <p>If you choose not to use the Intelligent Interceptor, you can handle the economic handshake manually as follows:</p>
-            <pre><code>try {
-  const res = await client.store(payload, 24);
-} catch (err) {
-  if (err.status === 402) {
-    const { invoice } = err.challenge;
-    console.log(`Payment required. Paying invoice: ${invoice}`);
+            <h3>Example: Custom Node.js Client (Manual 402 Handling)</h3>
+            <p>This example shows how to interact with a didbox402 node without using the automated SDK interceptors.</p>
+            <pre><code>import { signRequest } from '@didbox/sdk-crypto';
+
+const MY_DID = "did:key:z6Mk...";
+const MY_KEY = Buffer.from("...", "hex");
+const NODE_URL = "https://node.didbox.com";
+
+async function storeData(ciphertext) {
+  const timestamp = Date.now();
+  const path = "/store";
+  const body = JSON.stringify({ ciphertext, durationHours: 1 });
+  
+  // Create temporal signature
+  const sig = await signRequest(MY_KEY, "POST", path, body, timestamp);
+
+  // Initial Attempt
+  let res = await fetch(`${NODE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "X-DID": MY_DID,
+      "X-DID-Signature": sig,
+      "X-DID-Timestamp": timestamp.toString(),
+      "Content-Type": "application/json"
+    },
+    body
+  });
+
+  if (res.status === 402) {
+    const challenge = res.headers.get("WWW-Authenticate");
+    const { invoice, macaroon } = parseL402(challenge);
     
-    // 1. User/Agent pays the invoice
-    const { preimage } = await myWallet.pay(invoice);
+    // Settle via Lightning Wallet (Alby/WebLN)
+    const { preimage } = await window.webln.sendPayment(invoice);
     
-    // 2. Retry with the proof
-    const finalRes = await client.store(payload, 24, { payment: preimage });
-    console.log('Successfully stored after payment:', finalRes.storageId);
+    // Retry with proof
+    res = await fetch(`${NODE_URL}${path}`, {
+      method: "POST",
+      headers: {
+        "X-DID": MY_DID,
+        "X-DID-Signature": sig, // Reuse same sig within window
+        "X-DID-Timestamp": timestamp.toString(),
+        "Authorization": `L402 ${macaroon}:${preimage}`,
+        "Content-Type": "application/json"
+      },
+      body
+    });
   }
+
+  return res.json();
 }</code></pre>
         </section>
 
-        <section id="outside-cloudflare">
-            <h2>7. Running Outside Cloudflare</h2>
-            <p>To ensure true protocol neutrality, didbox402 can be deployed on standard cloud providers or bare metal.</p>
-            <h3>Storage Alternatives</h3>
-            <ul>
-                <li><strong>BLOB:</strong> Use the S3-compatible API (supported by AWS S3, GCS, and MinIO).</li>
-                <li><strong>Metadata:</strong> Swap D1 for PostgreSQL or MySQL.</li>
-            </ul>
-            <h3>Compute Portability</h3>
-            <p>The Hono framework runs on any Node.js, Deno, or Bun runtime. You can deploy as a Docker container or a serverless function (AWS Lambda / Google Cloud Functions).</p>
+        <section id="common-errors">
+            <h2>Common Errors & How to Fix Them</h2>
+            <table class="error-table">
+                <tr>
+                    <th>Error Code</th>
+                    <th>Likely Cause</th>
+                    <th>Resolution</th>
+                </tr>
+                <tr>
+                    <td><code>401: Timestamp window</code></td>
+                    <td>Client clock drift > 5 mins.</td>
+                    <td>Sync client clock with NTP or use server time from a previous response.</td>
+                </tr>
+                <tr>
+                    <td><code>401: Invalid Signature</code></td>
+                    <td>Signature does not cover full request hash.</td>
+                    <td>Verify Method, Path, and BodyHash are included in order.</td>
+                </tr>
+                <tr>
+                    <td><code>401: Replay detected</code></td>
+                    <td>Same signature used twice.</td>
+                    <td>Generate a fresh timestamp and signature for every new request.</td>
+                </tr>
+                <tr>
+                    <td><code>413: Payload too large</code></td>
+                    <td>Sent > 10MB ciphertext.</td>
+                    <td>Chunk large data or use a node with higher limits.</td>
+                </tr>
+            </table>
         </section>
 
         <section id="conformance">
@@ -161,14 +191,6 @@ export default app;</code></pre>
                 <li><strong>Economics:</strong> Correct 402 response code and amount calculation.</li>
             </ul>
         </section>
-
-        <section id="security">
-            <h2>7. Security Considerations</h2>
-            <ul>
-                <li><strong>Salt Management:</strong> The node salt must be kept secret. Rotating the salt will invalidate all existing inbox discoverability.</li>
-                <li><strong>Signature Binding:</strong> Always verify that the signature covers the specific Method + Path + Body being requested.</li>
-            </ul>
-        </div>
     </div>
 </body>
 </html>

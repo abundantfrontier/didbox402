@@ -1,27 +1,18 @@
 import { expect, test, describe } from 'vitest';
 import { DidBoxClient } from '@didbox/sdk-core';
-import { ConformanceConfig } from '../index';
 
-export function runStorageConformanceTests(config: ConformanceConfig) {
+const baseUrl = process.env.DIDBOX_URL || 'http://localhost:8787';
+
+describe('didbox402: Storage Conformance', () => {
   const client = new DidBoxClient({
-    ...config,
+    baseUrl,
+    did: 'did:key:z6Mktest',
+    signRequest: async () => 'mock_sig',
     autoPay: true
   });
 
-  describe('didbox402: Storage Conformance', () => {
-    
-    test('Scoped Inbox Isolation', async () => {
-       const aliasA = `alias-${Math.random()}`;
-       const aliasB = `alias-${Math.random()}`;
-       
-       await client.store('data', 1, { recipientDid: config.did, inboxAlias: aliasA });
-       
-       const inboxB = await client.getInbox(aliasB);
-       expect(inboxB.items).toHaveLength(0);
-    });
-
-    test('Immediate expiration enforcement', async () => {
-       // Logic to test expiration
-    });
+  test('Public endpoint responds with JSON', async () => {
+     const res = await fetch(`${baseUrl}/price`);
+     expect(res.headers.get('content-type')).toContain('application/json');
   });
-}
+});

@@ -1,25 +1,20 @@
-import { expect, test, describe } from 'vitest';
+import { expect, test, describe, beforeAll } from 'vitest';
 import { DidBoxClient } from '@didbox/sdk-core';
-import { ConformanceConfig } from '../index';
 
-export function runAuthConformanceTests(config: ConformanceConfig) {
+// This file is designed to be run against a configurable endpoint
+// For the local monorepo tests, we use the reference node URL.
+const baseUrl = process.env.DIDBOX_URL || 'http://localhost:8787';
+
+describe('didbox402: Authentication Conformance', () => {
   const client = new DidBoxClient({
-    ...config,
+    baseUrl,
+    did: 'did:key:z6Mktest',
+    signRequest: async () => 'mock_sig',
     autoPay: false
   });
 
-  describe('didbox402: Authentication Conformance', () => {
-    
-    test('Rejects request with stale timestamp', async () => {
-       // Logic to manually craft a stale request
-    });
-
-    test('Rejects replayed signature', async () => {
-       // Logic to attempt replay
-    });
-
-    test('Rejects malformed Multibase DID', async () => {
-       // Logic to test DID parsing
-    });
+  test('Rejects request with missing X-DID', async () => {
+    const res = await fetch(`${baseUrl}/price`);
+    expect(res.status).toBe(401);
   });
-}
+});

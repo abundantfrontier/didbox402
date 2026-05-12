@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.6.0) | Threat Model</title>
+    <title>didbox402 (v0.6.1) | Threat Model</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -13,59 +13,88 @@
             padding: 0 !important;
         }
         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #333; }
+        pre { background: #1e1e1e; color: #4ec9b0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #333; }
         .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
         .threat-category { border: 1px solid #eee; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
         .threat-category h3 { margin-top: 0; color: #b21f2d; }
         .mitigation { background: #1e1e1e; border: 1px solid #333; color: #4ec9b0; font-weight: bold; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem; font-family: monospace; }
         h1 { color: #000; margin-top: 0; }
         h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
-            .assertion, pre, .mitigation, .scaling-box, .math { background: #1e1e1e !important; color: #4ec9b0 !important; }
+        .assertion, pre, .mitigation, .scaling-box, .math { background: #1e1e1e !important; color: #4ec9b0 !important; }
+        .asset-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .asset-table th, .asset-table td { border: 1px solid #eee; padding: 10px; text-align: left; }
+        .asset-table th { background: #f9f9f9; }
     </style>
 </head>
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Shield: Threat Model <span style="font-size: 0.5em; opacity: 0.7;">v0.6.0</span></h1>
+        <h1>The Shield: Threat Model <span style="font-size: 0.5em; opacity: 0.7;">v0.6.1</span></h1>
 
-        <p>didbox402 v0.6.0 significantly hardens the protocol against interception and replay attacks.</p>
+        <p>Honesty starts with admitting what <code>didbox402</code> <em>cannot</em> protect. While we aim for maximum privacy, the physical reality of hosting and networking creates metadata "exhaust."</p>
+
+        <h2>1. Key Assets & Trust Boundaries</h2>
+        <table class="asset-table">
+            <tr>
+                <th>Asset</th>
+                <th>Trust Boundary</th>
+                <th>Protection</th>
+            </tr>
+            <tr>
+                <td>Plaintext Data</td>
+                <td>Client-Side</td>
+                <td>End-to-End Encryption (E2EE)</td>
+            </tr>
+            <tr>
+                <td>Identity (DID)</td>
+                <td>Protocol-Wide</td>
+                <td>Salted Hashing & Ed25519 Signatures</td>
+            </tr>
+            <tr>
+                <td>Funds (Sats/USDC)</td>
+                <td>Wallet-Side</td>
+                <td>402 Challenge-Response Handshake</td>
+            </tr>
+        </table>
+
+        <h2>2. Main Threat Categories</h2>
 
         <div class="threat-category">
-            <h3>1. Metadata Leakage (The Social Graph)</h3>
-            <p><strong>Threat:</strong> The storage provider can see who is communicating with whom by observing salted DID hashes.</p>
-            <div class="mitigation">
-                Mitigation: Mandatory Salted Hashing for all indexes (Inboxes, Storage Records). Provider never sees raw DIDs.
-            </div>
-        </div>
-
-        <div class="threat-category">
-            <h3>2. Payload Size & Frequency (Traffic Analysis)</h3>
-            <p><strong>Threat:</strong> Even if data is encrypted, the size of the ciphertext and retrieval frequency can leak the payload type.</p>
-            <div class="mitigation">
-                Mitigation: Implementation of client-side Padding to normalize traffic profiles.
-            </div>
-        </div>
-
-        <div class="threat-category">
-            <h3>3. Replay Attacks</h3>
+            <h3>Authentication (The Shield)</h3>
             <p><strong>Threat:</strong> An attacker intercepts a signed storage request and resubmits it to drain funds or overwrite data.</p>
             <div class="mitigation">
-                v0.6.0 Mitigation: Mandatory <strong>Nonce Tracking</strong> and <strong>Temporal Binding</strong>. Signatures are single-use and expire after 5 minutes.
+                Mitigation: Mandatory <strong>Nonce Tracking</strong> and <strong>Temporal Request Hash</strong> binding. Signatures are single-use and valid for ±5 minutes.
             </div>
         </div>
 
         <div class="threat-category">
-            <h3>4. Infrastructure DoS (Janitor)</h3>
-            <p><strong>Threat:</strong> Malicious actors trigger the Janitor endpoint to perform expensive cleanup operations or disrupt service.</p>
+            <h3>Payments (The Rail)</h3>
+            <p><strong>Threat:</strong> A provider accepts payment but refuses retrieval or deletes data early.</p>
             <div class="mitigation">
-                v0.6.0 Mitigation: Mandatory <strong>X-Admin-Token</strong> requirement for all Janitor operations.
+                Mitigation: didbox402 is a <strong>Commodity Protocol</strong>. Agents should diversify storage across multiple nodes. Provider reputation acts as a market signal.
             </div>
         </div>
 
-        <h2>Trust Assumptions</h2>
+        <div class="threat-category">
+            <h3>Privacy (The Shadow)</h3>
+            <p><strong>Threat:</strong> The storage provider observes who is communicating with whom by observing DID hashes.</p>
+            <div class="mitigation">
+                Mitigation: <strong>Salted DID Hashing</strong> for all lookup indexes. Observers cannot link storage boxes to recipients without knowing the secret node salt.
+            </div>
+        </div>
+
+        <div class="threat-category">
+            <h3>Availability (Infrastructure)</h3>
+            <p><strong>Threat:</strong> Malicious actors trigger the Janitor endpoint to disrupt service.</p>
+            <div class="mitigation">
+                Mitigation: Mandatory <strong>X-Admin-Token</strong> requirement for all Janitor operations.
+            </div>
+        </div>
+
+        <h2>3. Trust Assumptions</h2>
         <ul>
-            <li><strong>Client Integrity:</strong> We assume the client handles their Ed25519 keys securely.</li>
-            <li><strong>Infrastructure:</strong> We trust the underlying cloud (R2/S3) to maintain bit-integrity.</li>
+            <li><strong>Client Integrity:</strong> We assume the client handles their Ed25519 keys securely and never shares the plaintext.</li>
+            <li><strong>Infrastructure Bit-Integrity:</strong> We trust the underlying cloud (R2/S3) to maintain data for the lease duration.</li>
         </ul>
     </div>
 </body>
