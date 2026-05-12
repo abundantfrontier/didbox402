@@ -1,6 +1,6 @@
 {
   "name": "@didbox/server",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "scripts": {
     "dev": "wrangler dev src/index.ts",
     "deploy": "wrangler deploy --minify src/index.ts",

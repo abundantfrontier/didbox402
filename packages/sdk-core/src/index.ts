@@ -50,8 +50,8 @@ export class DidBoxClient {
       const data: any = await res.json();
       
       const challengeObj = {
-        invoice: l402Challenge ? l402Challenge.match(/invoice="([^"]+)"/)?.[1] : undefined,
-        macaroon: l402Challenge ? l402Challenge.match(/macaroon="([^"]+)"/)?.[1] : undefined,
+        invoice: l402Challenge?.match(/invoice="([^"]+)"/)?.[1],
+        macaroon: l402Challenge?.match(/macaroon="([^"]+)"/)?.[1],
         requirements: x402Challenge ? JSON.parse(Buffer.from(x402Challenge, 'base64').toString()) : undefined,
         amount: data.amount_satoshis || parseInt(res.headers.get('X-Amount') || '0')
       };

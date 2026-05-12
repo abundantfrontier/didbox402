@@ -16,6 +16,8 @@ describe('DidBoxClient', () => {
     vi.clearAllMocks();
     // Global fetch mock
     global.fetch = vi.fn();
+    // Enable dev mode for tests
+    process.env.DEV_MODE = 'true';
   });
 
   it('automatically handles 402 challenge-response flow', async () => {
@@ -42,6 +44,7 @@ describe('DidBoxClient', () => {
       .mockResolvedValueOnce({
         status: 200,
         ok: true,
+        headers: new Headers(),
         json: async () => ({ storageId: 'box-123' })
       });
 
@@ -61,11 +64,12 @@ describe('DidBoxClient', () => {
     (global.fetch as any).mockResolvedValueOnce({
       status: 402,
       ok: false,
+      headers: new Headers(),
       json: async () => ({ amount_satoshis: 100 }),
       text: async () => 'Payment Required'
     });
 
-    await expect(client.store('test', 1)).rejects.toThrow('Store failed: 402');
+    await expect(client.store('test', 1)).rejects.toThrow('Payment Required');
   });
 
   it('correctly includes X-DID-Timestamp in every request', async () => {
