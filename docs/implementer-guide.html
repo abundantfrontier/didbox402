@@ -18,6 +18,7 @@
         h1 { color: #000; margin-top: 0; }
         h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
         h3 { color: #333; margin-top: 25px; }
+        .note { background: #fff3cd; border-left: 5px solid #ffeeba; padding: 15px; margin: 20px 0; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -25,41 +26,91 @@
         <a href="index.html" class="back-link">← Index</a>
         <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.6.0</span></h1>
 
-        <p>This guide provides technical instructions for developers building a compliant <strong>didbox402 node</strong>. By following these requirements, your implementation will be interoperable with the official SDKs and other compliant clients.</p>
+        <p>This guide provides a comprehensive technical blueprint for teams building <strong>didbox402-compatible</strong> servers or clients. It outlines the mandatory invariants required to claim protocol compliance.</p>
 
-        <h2>1. The Verification Gauntlet</h2>
-        <p>Any compliant node MUST implement the following five pillars of security and economics:</p>
-        <ul>
-            <li><strong>L402/x402 Verification:</strong> Real preimage or signature validation (no mocks).</li>
-            <li><strong>Ed25519 Auth:</strong> Standard <code>did:key</code> multibase parsing and signature verification.</li>
-            <li><strong>Replay Protection:</strong> Mandatory nonce tracking and ±5m drift window.</li>
-            <li><strong>Salted Privacy:</strong> All ID indexes MUST be hashed using a secret node salt.</li>
-            <li><strong>Lease Lifecycle:</strong> Automated purging of expired blobs and metadata.</li>
-        </ul>
+        <section id="introduction">
+            <h2>1. Introduction</h2>
+            <p><strong>didbox402</strong> is a protocol for ephemeral, paid, and verifiable storage. It is designed for autonomous agents that need to hand off state or communicate securely without persistent accounts.</p>
+            
+            <div class="note">
+                <strong>Protocol vs Product:</strong> The core protocol defines how agents authenticate, pay, and store data. Commercial products build on this by providing high-availability hosting, multi-chain payment support, or advanced audit tools.
+            </div>
+        </section>
 
-        <h2>2. Choosing Your Infrastructure</h2>
-        <p>While the reference implementation uses Cloudflare, the protocol is <strong>Infrastructure Agnostic</strong>. You can implement didbox402 on:</p>
-        <ul>
-            <li><strong>AWS:</strong> Lambda (Compute) + S3 (BLOB) + RDS/Dynamo (Metadata).</li>
-            <li><strong>GCP:</strong> Functions (Compute) + GCS (BLOB) + Cloud SQL (Metadata).</li>
-            <li><strong>Self-Hosted:</strong> Node.js/Bun (Compute) + MinIO (BLOB) + SQLite/Postgres (Metadata).</li>
-        </ul>
+        <section id="core-concepts">
+            <h2>2. Core Concepts</h2>
+            <ul>
+                <li><strong>DID Authentication:</strong> Identity is proven per-request via <code>X-DID</code> and a signature.</li>
+                <li><strong>Temporal Binding:</strong> Every request is timestamped (<code>X-DID-Timestamp</code>) and bound to a 5-minute validity window.</li>
+                <li><strong>Dual-Rail Economics:</strong> Nodes must support at least one standard rail (L402 or x402) for lease payments.</li>
+                <li><strong>Salted Privacy:</strong> All internal indexes use <code>SHA256(DID + Alias + Secret_Salt)</code> to ensure pseudonymity.</li>
+            </ul>
+        </section>
 
-        <h2>3. Implementing the Handshake</h2>
-        <p>The signature verification is the most critical component. Ensure your middleware handles the body buffer correctly for <strong>Signature Binding</strong>.</p>
-        <pre><code>// Example Middleware Logic:
-const body = await req.text();
-const bodyHash = sha256(body);
-const requestHash = sha256(`${timestamp}${method}${path}${bodyHash}`);
-const isValid = ed25519.verify(signature, requestHash, publicKey);</code></pre>
+        <section id="server-implementation">
+            <h2>3. Implementing a Compatible Server</h2>
+            <h3>Minimum Requirements</h3>
+            <ul>
+                <li>Implement <code>verifyDidSignature</code> middleware using standard <strong>Ed25519 did:key</strong> parsing.</li>
+                <li>Implement <strong>Nonce Tracking</strong> to reject replayed signatures.</li>
+                <li>Enforce the ±5 minute drift window for timestamps.</li>
+            </ul>
 
-        <h2>4. Handling Payment Challenges</h2>
-        <p>Your node MUST respond with a <code>402 Payment Required</code> when a lease is requested or extended without a valid proof.</p>
-        <pre><code>// x402 Challenge Header:
-PAYMENT-REQUIRED: eyJhbW91bnQiOiIwLjAxIiwidXJyZW5jeSI6IlVTREMiLCJuZXR3b3JrIjoiYmFzZSJ9</code></pre>
+            <h3>The 402 Handshake</h3>
+            <p>When a payment is required (Store/Extend), the server MUST return a <code>402</code> with the appropriate challenge headers:</p>
+            <pre><code>WWW-Authenticate: L402 macaroon="...", invoice="..."
+PAYMENT-REQUIRED: {base64_requirements}</code></pre>
 
-        <h2>5. Capability Advertising</h2>
-        <p>Nodes SHOULD implement a <code>GET /price</code> or <code>GET /info</code> endpoint so clients can discover supported rails and current rates autonomously.</p>
+            <h3>Storage Lifecycle</h3>
+            <ul>
+                <li><strong>Atomic Store:</strong> Data in R2/S3 must be consistent with metadata in D1/SQL.</li>
+                <li><strong>Expiration:</strong> Retrieval MUST be blocked as soon as <code>now > expires_at</code>.</li>
+                <li><strong>Physical Purge:</strong> A background process must physically delete blobs to prevent resource exhaustion.</li>
+            </ul>
+        </section>
+
+        <section id="client-implementation">
+            <h2>4. Implementing a Client</h2>
+            <h3>Key Management</h3>
+            <p>Clients are responsible for their own Ed25519 keys. The protocol expects standard <code>did:key</code> identifiers.</p>
+            
+            <h3>Handling 402 Challenges</h3>
+            <p>A compliant client SHOULD:</p>
+            <ol>
+                <li>Attempt a request without payment headers.</li>
+                <li>On 402, parse the <code>WWW-Authenticate</code> or <code>PAYMENT-REQUIRED</code> headers.</li>
+                <li>Settle the payment via a connected wallet (WebLN or EIP-1193).</li>
+                <li>Retry the request with <code>Authorization</code> or <code>PAYMENT-SIGNATURE</code>.</li>
+            </ol>
+        </section>
+
+        <section id="extension-points">
+            <h2>5. Extension Points</h2>
+            <p>Commercial providers can extend didbox402 at these points:</p>
+            <ul>
+                <li><strong>Payment Rails:</strong> Add support for Solana, Lightning Service Providers (LSPs), or custom credit systems.</li>
+                <li><strong>Storage Backends:</strong> Move from Cloudflare R2 to IPFS, Arweave, or enterprise-grade S3 clusters.</li>
+                <li><strong>Authorization:</strong> Implement Verifiable Credentials (VCs) for gated storage tiers.</li>
+            </ul>
+        </section>
+
+        <section id="conformance">
+            <h2>6. Conformance & Testing</h2>
+            <p>Use the <code>@didbox/conformance</code> suite to validate your implementation. Your node must pass the following scenarios:</p>
+            <ul>
+                <li><strong>Auth:</strong> Replay rejection, drift window enforcement, malformed DID rejection.</li>
+                <li><strong>Privacy:</strong> Proof of salted hashing (no raw DIDs in DB).</li>
+                <li><strong>Economics:</strong> Correct 402 response code and amount calculation.</li>
+            </ul>
+        </section>
+
+        <section id="security">
+            <h2>7. Security Considerations</h2>
+            <ul>
+                <li><strong>Salt Management:</strong> The node salt must be kept secret. Rotating the salt will invalidate all existing inbox discoverability.</li>
+                <li><strong>Signature Binding:</strong> Always verify that the signature covers the specific Method + Path + Body being requested.</li>
+            </ul>
+        </div>
     </div>
 </body>
 </html>
