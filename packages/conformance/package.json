@@ -1,0 +1,10 @@
+{
+  "name": "@didbox/conformance",
+  "version": "0.6.0",
+  "main": "src/index.ts",
+  "dependencies": {
+    "vitest": "^1.5.0",
+    "@didbox/sdk-core": "^0.4.0",
+    "@didbox/sdk-crypto": "^0.4.0"
+  }
+}

@@ -1,23 +1,29 @@
-# didbox402 Monorepo
+# didbox402: The Open Protocol for Agentic Storage
 
 **"A vending machine for privacy."**
 
-didbox402 is an agent-native protocol for ephemeral, paid, and verifiable storage. This repository is organized as a modular monorepo using `npm workspaces`.
+didbox402 is an agent-native protocol for ephemeral, paid, and verifiable storage. It enables autonomous software entities (agents, LLMs) to lease temporary storage "boxes" using Decentralized Identifiers (DIDs) and standardized micropayments (L402 & x402).
+
+## Status: v0.6.0 (Open Protocol Release)
+
+This repository serves as the official specification and reference implementation for the didbox402 protocol.
+
+## Core Features
+- **Ephemeral Leases:** Storage is a time-bound lease. Data is automatically purged upon expiration.
+- **Dual-Rail Payments:** Support for real **L402 (Lightning)** and **x402 (USDC/Base)** production rails.
+- **Cryptographic Sovereignty:** Real **Ed25519** authentication with strict signature binding and replay protection.
+- **Absolute Privacy:** Salted DID hashing ensures no raw identity data ever touches the database.
+- **Modular SDK:** Reusable packages for agents to autonomously negotiate payments and manage cryptographic state.
 
 ## Repository Structure
+- **`PROTOCOL.md`**: The definitive technical specification.
+- **`packages/server`**: The reference didbox402 node (Cloudflare Workers + R2 + D1).
+- **`packages/sdk-core`**: The base protocol client for agents.
+- **`packages/sdk-crypto`**: Real Ed25519 `did:key` identity utilities.
+- **`packages/sdk-payments`**: Standardized L402/x402 negotiation logic.
+- **`docs/`**: Comprehensive implementer and architectural documentation.
 
-- **`packages/server`**: The reference didbox402 node implementation (Cloudflare Workers + R2 + D1).
-- **`packages/sdk-core`**: The core HTTP protocol client for agents.
-- **`packages/sdk-crypto`**: Cryptographic utilities for Ed25519 `did:key` identity and request signing.
-- **`packages/sdk-payments`**: x402 payment negotiation and Lightning Network integration logic.
-
-## Core Features (v0.2.0)
-- **Cryptographic Sovereignty:** Real Ed25519 EdDSA signature verification with strict Request-Hash binding.
-- **Automated Economics:** Full 402 Payment Required challenge-response handshake with automated SDK negotiation.
-- **Private Inboxes:** Salted DID hashing for project-scoped privacy and isolation.
-- **Stateless & Scalable:** Edge-native, hands-off scaling via Cloudflare primitives.
-
-## Quick Start (v0.2.0)
+## Quick Start
 
 ### 1. Install Dependencies
 ```bash
@@ -25,9 +31,9 @@ npm install
 ```
 
 ### 2. Run the Conformance Tests
-This verifies the cryptography and payment handshakes across all packages.
+Verify protocol compliance across all packages:
 ```bash
-npm test
+npm test --workspaces
 ```
 
 ### 3. Run the Reference Node (Local)
@@ -36,15 +42,16 @@ cd packages/server
 npx wrangler dev
 ```
 
-### 4. Run the SDK Integration Demo
-In a new terminal:
+### 4. Integration Demo
+See a real agentic flow with automated payment negotiation:
 ```bash
 npx ts-node scripts/demo.ts
 ```
 
 ## Documentation
-The complete technical specification is in **[PROTOCOL.md](PROTOCOL.md)**.
-Extended architectural docs are available in **`docs/`**.
+- **[Formal Protocol Specification](PROTOCOL.md)**
+- **[Implementer's Guide](docs/implementer-guide.html)** (Coming soon in v0.6.0)
+- **[High-Contrast Documentation Suite](docs/index.html)**
 
 ## License
 Open Core - Built at [adaptivefrontier.org](https://adaptivefrontier.org).

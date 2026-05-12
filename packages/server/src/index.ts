@@ -23,6 +23,27 @@ app.use('*', verifyDidSignature);
  * GET /price
  * Discover current storage and egress rates.
  */
+/**
+ * GET /.well-known/didbox-configuration
+ * Capability discovery for the node.
+ */
+app.get('/.well-known/didbox-configuration', async (c) => {
+  return c.json({
+    version: '0.6.0',
+    supported_rails: ['L402', 'x402'],
+    limits: {
+      max_payload_bytes: 10 * 1024 * 1024,
+      max_duration_hours: 8760
+    },
+    endpoints: {
+      store: '/store',
+      retrieve: '/retrieve/:id',
+      inbox: '/inbox/:alias',
+      price: '/price'
+    }
+  });
+});
+
 app.get('/price', async (c) => {
   return c.json({
     base_rate_per_mb_hour: parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100'),

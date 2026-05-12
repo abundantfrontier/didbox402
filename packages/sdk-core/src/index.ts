@@ -4,7 +4,25 @@ export interface DidBoxClientConfig {
   baseUrl: string;
   did: string;
   signRequest: (data: string) => Promise<string>;
+  /**
+   * Automatically handle 402 challenges by calling negotiatePayment.
+   * Defaults to false.
+   */
   autoPay?: boolean;
+}
+
+export class DidBoxError extends Error {
+  constructor(public status: number, message: string, public data?: any) {
+    super(message);
+    this.name = 'DidBoxError';
+  }
+}
+
+export class DidBoxPaymentRequiredError extends DidBoxError {
+  constructor(public amount: number, public challenge: any, message: string) {
+    super(402, message, challenge);
+    this.name = 'DidBoxPaymentRequiredError';
+  }
 }
 
 export class DidBoxClient {
@@ -23,40 +41,39 @@ export class DidBoxClient {
     headers.set('X-DID-Timestamp', timestamp.toString());
     if (body) headers.set('Content-Type', 'application/json');
 
-    const res = await fetch(`${this.config.baseUrl}${path}`, { ...options, headers });
+    let res = await fetch(`${this.config.baseUrl}${path}`, { ...options, headers });
     
-    // Automated 402 Negotiation (L402 and x402)
-    if (res.status === 402 && this.config.autoPay) {
+    // Automated 402 Negotiation (Optional)
+    if (res.status === 402) {
       const l402Challenge = res.headers.get('WWW-Authenticate');
       const x402Challenge = res.headers.get('PAYMENT-REQUIRED');
+      const data: any = await res.json();
       
-      if (l402Challenge?.startsWith('L402 ')) {
-         // L402 Flow
-         const parts = l402Challenge.substring(5).split(',').reduce((acc: any, part) => {
-           const [key, value] = part.trim().split('=');
-           acc[key] = value.replace(/"/g, '');
-           return acc;
-         }, {});
-         
-         const amount = parseInt(res.headers.get('X-Amount') || '0');
-         
-         // For the v0.4.0 Hardened Mock: Extract the mock preimage from the macaroon
-         const decodedMacaroon = JSON.parse(Buffer.from(parts.macaroon, 'base64').toString());
-         const preimage = decodedMacaroon._mock_preimage;
-         
-         await negotiatePayment(amount, parts.invoice);
+      const challengeObj = {
+        invoice: l402Challenge ? l402Challenge.match(/invoice="([^"]+)"/)?.[1] : undefined,
+        macaroon: l402Challenge ? l402Challenge.match(/macaroon="([^"]+)"/)?.[1] : undefined,
+        requirements: x402Challenge ? JSON.parse(Buffer.from(x402Challenge, 'base64').toString()) : undefined,
+        amount: data.amount_satoshis || parseInt(res.headers.get('X-Amount') || '0')
+      };
+
+      if (this.config.autoPay) {
+         const { preimage, signature: web3Sig } = await negotiatePayment(challengeObj.amount, challengeObj);
          
          const retryHeaders = new Headers(headers);
-         retryHeaders.set('Authorization', `L402 ${parts.macaroon}:${preimage}`);
-         return fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
-      } else if (x402Challenge) {
-         // x402 Flow
-         const requirements = JSON.parse(Buffer.from(x402Challenge, 'base64').toString());
-         await negotiatePayment(requirements.amount, 'x402');
-         const retryHeaders = new Headers(headers);
-         retryHeaders.set('PAYMENT-SIGNATURE', `sig_${requirements.amount}`);
-         return fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
+         if (preimage) {
+            retryHeaders.set('Authorization', `L402 ${challengeObj.macaroon}:${preimage}`);
+         } else if (web3Sig) {
+            retryHeaders.set('PAYMENT-SIGNATURE', web3Sig);
+         }
+         
+         res = await fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
+      } else {
+         throw new DidBoxPaymentRequiredError(challengeObj.amount, challengeObj, 'Payment Required');
       }
+    }
+
+    if (!res.ok) {
+      throw new DidBoxError(res.status, `Request failed: ${res.status} ${await res.text()}`);
     }
 
     return res;

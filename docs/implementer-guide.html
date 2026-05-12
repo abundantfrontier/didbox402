@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 (v0.6.0) | Implementer's Guide</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
+        .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
+        pre code, .assertion code, .mitigation code, .scaling-box code, .math code { 
+            background: transparent !important; 
+            color: inherit !important; 
+            padding: 0 !important;
+        }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        pre { background: #1e1e1e; color: #4ec9b0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #333; font-family: 'SFMono-Regular', Consolas, monospace !important; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
+        h1 { color: #000; margin-top: 0; }
+        h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        h3 { color: #333; margin-top: 25px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Index</a>
+        <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.6.0</span></h1>
+
+        <p>This guide provides technical instructions for developers building a compliant <strong>didbox402 node</strong>. By following these requirements, your implementation will be interoperable with the official SDKs and other compliant clients.</p>
+
+        <h2>1. The Verification Gauntlet</h2>
+        <p>Any compliant node MUST implement the following five pillars of security and economics:</p>
+        <ul>
+            <li><strong>L402/x402 Verification:</strong> Real preimage or signature validation (no mocks).</li>
+            <li><strong>Ed25519 Auth:</strong> Standard <code>did:key</code> multibase parsing and signature verification.</li>
+            <li><strong>Replay Protection:</strong> Mandatory nonce tracking and ±5m drift window.</li>
+            <li><strong>Salted Privacy:</strong> All ID indexes MUST be hashed using a secret node salt.</li>
+            <li><strong>Lease Lifecycle:</strong> Automated purging of expired blobs and metadata.</li>
+        </ul>
+
+        <h2>2. Choosing Your Infrastructure</h2>
+        <p>While the reference implementation uses Cloudflare, the protocol is <strong>Infrastructure Agnostic</strong>. You can implement didbox402 on:</p>
+        <ul>
+            <li><strong>AWS:</strong> Lambda (Compute) + S3 (BLOB) + RDS/Dynamo (Metadata).</li>
+            <li><strong>GCP:</strong> Functions (Compute) + GCS (BLOB) + Cloud SQL (Metadata).</li>
+            <li><strong>Self-Hosted:</strong> Node.js/Bun (Compute) + MinIO (BLOB) + SQLite/Postgres (Metadata).</li>
+        </ul>
+
+        <h2>3. Implementing the Handshake</h2>
+        <p>The signature verification is the most critical component. Ensure your middleware handles the body buffer correctly for <strong>Signature Binding</strong>.</p>
+        <pre><code>// Example Middleware Logic:
+const body = await req.text();
+const bodyHash = sha256(body);
+const requestHash = sha256(`${timestamp}${method}${path}${bodyHash}`);
+const isValid = ed25519.verify(signature, requestHash, publicKey);</code></pre>
+
+        <h2>4. Handling Payment Challenges</h2>
+        <p>Your node MUST respond with a <code>402 Payment Required</code> when a lease is requested or extended without a valid proof.</p>
+        <pre><code>// x402 Challenge Header:
+PAYMENT-REQUIRED: eyJhbW91bnQiOiIwLjAxIiwidXJyZW5jeSI6IlVTREMiLCJuZXR3b3JrIjoiYmFzZSJ9</code></pre>
+
+        <h2>5. Capability Advertising</h2>
+        <p>Nodes SHOULD implement a <code>GET /price</code> or <code>GET /info</code> endpoint so clients can discover supported rails and current rates autonomously.</p>
+    </div>
+</body>
+</html>
