@@ -30,8 +30,10 @@ Every request MUST be authenticated via DID signatures with temporal binding.
   - `X-DID-Timestamp`: Unix Epoch in milliseconds.
 
 ### 2.2 Signature Binding & Replay Protection
-The signature MUST cover the **Temporal Request Hash**:
-`SHA256(Timestamp + Method + Path + SHA256(Raw_Body))`
+Every signature MUST be unique and temporally bound.
+1. **Binding:** Signature MUST cover `SHA256(Timestamp + Method + Path + SHA256(Raw_Body))`.
+2. **Drift Window:** Servers MUST reject requests with a timestamp drift > 5 minutes.
+3. **Nonce Tracking:** Servers MUST cache every signature within the 5-minute window and reject any re-used signature.
 
 ---
 

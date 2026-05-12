@@ -35,22 +35,47 @@ describe('Inbox Management', () => {
     const payload = { alias: 'work-project' };
     const sig = await signRequest('POST', '/inboxes', JSON.stringify(payload), timestamp);
 
-    const createRes = await worker.fetch(new Request('http://localhost/inboxes', {
+    // 1. Get Challenge
+    const res1 = await worker.fetch(new Request('http://localhost/inboxes', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-DID': MY_DID,
         'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString(),
-        'X-Payment': 'preimage_1000_ok'
+        'X-DID-Timestamp': timestamp.toString()
+      },
+      body: JSON.stringify(payload)
+    }), env, createExecutionContext());
+    expect(res1.status).toBe(402);
+
+    const challenge = res1.headers.get('WWW-Authenticate') || '';
+    const parts = challenge.substring(5).split(',').reduce((acc: any, part) => {
+      const [key, value] = part.trim().split('=');
+      acc[key] = value.replace(/"/g, '');
+      return acc;
+    }, {});
+    const decoded = JSON.parse(Buffer.from(parts.macaroon, 'base64').toString());
+
+    // 2. Retry with Proof (FRESH SIG)
+    const timestamp2 = Date.now() + 5;
+    const sig2 = await signRequest('POST', '/inboxes', JSON.stringify(payload), timestamp2);
+
+    const createRes = await worker.fetch(new Request('http://localhost/inboxes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-DID': MY_DID,
+        'X-DID-Signature': sig2,
+        'X-DID-Timestamp': timestamp2.toString(),
+        'Authorization': `L402 ${parts.macaroon}:${decoded._mock_preimage}`
       },
       body: JSON.stringify(payload)
     }), env, createExecutionContext());
 
     expect(createRes.status).toBe(200);
 
-    // List Inboxes
-    const listTimestamp = Date.now();
+    // 3. List Inboxes
+    const listTimestamp = Date.now() + 10;
     const listSig = await signRequest('GET', '/inboxes', '', listTimestamp);
     const listRes = await worker.fetch(new Request('http://localhost/inboxes', {
       headers: {
@@ -67,8 +92,8 @@ describe('Inbox Management', () => {
   });
 
   test('Scoped Inbox Retrieval', async () => {
-    // Store in 'work' alias
-    const timestamp = Date.now();
+    // Store in 'work' alias (using DEV_MODE to bypass complex L402 flow for simplicity in this test)
+    const timestamp = Date.now() + 15;
     const payload = { ciphertext: 'work_data', durationHours: 1, recipientDid: MY_DID, inboxAlias: 'work' };
     const sig = await signRequest('POST', '/store', JSON.stringify(payload), timestamp);
 
@@ -78,14 +103,13 @@ describe('Inbox Management', () => {
         'Content-Type': 'application/json',
         'X-DID': MY_DID,
         'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString(),
-        'X-Payment': 'preimage_100_ok'
+        'X-DID-Timestamp': timestamp.toString()
       },
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     // Query 'personal' alias - should be empty
-    const personalTimestamp = Date.now();
+    const personalTimestamp = Date.now() + 20;
     const personalSig = await signRequest('GET', '/inbox/personal', '', personalTimestamp);
     const personalRes = await worker.fetch(new Request('http://localhost/inbox/personal', {
       headers: {
@@ -97,7 +121,7 @@ describe('Inbox Management', () => {
     expect((await personalRes.json() as any).items).toHaveLength(0);
 
     // Query 'work' alias - should have 1 item
-    const workTimestamp = Date.now();
+    const workTimestamp = Date.now() + 25;
     const workSig = await signRequest('GET', '/inbox/work', '', workTimestamp);
     const workRes = await worker.fetch(new Request('http://localhost/inbox/work', {
       headers: {

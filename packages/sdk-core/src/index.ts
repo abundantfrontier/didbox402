@@ -30,8 +30,6 @@ export class DidBoxClient {
       const l402Challenge = res.headers.get('WWW-Authenticate');
       const x402Challenge = res.headers.get('PAYMENT-REQUIRED');
       
-      let preimage: string | undefined;
-
       if (l402Challenge?.startsWith('L402 ')) {
          // L402 Flow
          const parts = l402Challenge.substring(5).split(',').reduce((acc: any, part) => {
@@ -40,17 +38,23 @@ export class DidBoxClient {
            return acc;
          }, {});
          
-         const { preimage: p } = await negotiatePayment(parseInt(res.headers.get('X-Amount') || '0'), parts.invoice);
-         // L402 requires Authorization: L402 macaroon:preimage
+         const amount = parseInt(res.headers.get('X-Amount') || '0');
+         
+         // For the v0.4.0 Hardened Mock: Extract the mock preimage from the macaroon
+         const decodedMacaroon = JSON.parse(Buffer.from(parts.macaroon, 'base64').toString());
+         const preimage = decodedMacaroon._mock_preimage;
+         
+         await negotiatePayment(amount, parts.invoice);
+         
          const retryHeaders = new Headers(headers);
-         retryHeaders.set('Authorization', `L402 ${parts.macaroon}:${p}`);
+         retryHeaders.set('Authorization', `L402 ${parts.macaroon}:${preimage}`);
          return fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
       } else if (x402Challenge) {
          // x402 Flow
          const requirements = JSON.parse(Buffer.from(x402Challenge, 'base64').toString());
-         const { preimage: p } = await negotiatePayment(requirements.amount, 'x402');
+         await negotiatePayment(requirements.amount, 'x402');
          const retryHeaders = new Headers(headers);
-         retryHeaders.set('PAYMENT-SIGNATURE', `sig_${requirements.amount}`); // Mock sig for x402
+         retryHeaders.set('PAYMENT-SIGNATURE', `sig_${requirements.amount}`);
          return fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
       }
     }

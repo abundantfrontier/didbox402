@@ -34,14 +34,39 @@ describe('Storage Operations', () => {
     const payload = { ciphertext: 'storage_test', durationHours: 1 };
     const sig = await signRequest('POST', '/store', JSON.stringify(payload), timestamp);
 
-    const storeRes = await worker.fetch(new Request('http://localhost/store', {
+    // 1. Get Challenge
+    const res1 = await worker.fetch(new Request('http://localhost/store', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-DID': MY_DID,
         'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString(),
-        'X-Payment': 'preimage_100_ok'
+        'X-DID-Timestamp': timestamp.toString()
+      },
+      body: JSON.stringify(payload)
+    }), env, createExecutionContext());
+    expect(res1.status).toBe(402);
+
+    const challenge = res1.headers.get('WWW-Authenticate') || '';
+    const parts = challenge.substring(5).split(',').reduce((acc: any, part) => {
+      const [key, value] = part.trim().split('=');
+      acc[key] = value.replace(/"/g, '');
+      return acc;
+    }, {});
+    const decoded = JSON.parse(Buffer.from(parts.macaroon, 'base64').toString());
+
+    // 2. Retry with Proof
+    const timestamp2 = Date.now() + 10;
+    const sig2 = await signRequest('POST', '/store', JSON.stringify(payload), timestamp2);
+
+    const storeRes = await worker.fetch(new Request('http://localhost/store', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-DID': MY_DID,
+        'X-DID-Signature': sig2,
+        'X-DID-Timestamp': timestamp2.toString(),
+        'Authorization': `L402 ${parts.macaroon}:${decoded._mock_preimage}`
       },
       body: JSON.stringify(payload)
     }), env, createExecutionContext());
@@ -49,8 +74,8 @@ describe('Storage Operations', () => {
     expect(storeRes.status).toBe(200);
     const { storageId } = await storeRes.json() as any;
 
-    // Retrieve
-    const retrieveTimestamp = Date.now();
+    // 3. Retrieve
+    const retrieveTimestamp = Date.now() + 20;
     const retrieveSig = await signRequest('GET', `/retrieve/${storageId}`, '', retrieveTimestamp);
     const retrieveRes = await worker.fetch(new Request(`http://localhost/retrieve/${storageId}`, {
       headers: {
@@ -66,7 +91,6 @@ describe('Storage Operations', () => {
   });
 
   test('Privacy Invariant: Raw DID never appears in DB', async () => {
-    // Check all records in DB for the raw DID string
     const { results } = await env.DB.prepare("SELECT * FROM storage_records").all();
     for (const row of results as any[]) {
       expect(JSON.stringify(row)).not.toContain(MY_DID);
@@ -74,7 +98,7 @@ describe('Storage Operations', () => {
   });
 
   test('Replay Protection: Rejects reused valid signature (nonce tracking)', async () => {
-    const timestamp = Date.now();
+    const timestamp = Date.now() + 30;
     const payload = { ciphertext: 'replay_test', durationHours: 1 };
     const sig = await signRequest('POST', '/store', JSON.stringify(payload), timestamp);
 
@@ -82,19 +106,18 @@ describe('Storage Operations', () => {
       'Content-Type': 'application/json',
       'X-DID': MY_DID,
       'X-DID-Signature': sig,
-      'X-DID-Timestamp': timestamp.toString(),
-      'X-Payment': 'preimage_100_ok'
+      'X-DID-Timestamp': timestamp.toString()
     };
 
-    // First request should succeed
+    // First request should get 402 but CACHE THE NONCE
     const res1 = await worker.fetch(new Request('http://localhost/store', {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
     }), env, createExecutionContext());
-    expect(res1.status).toBe(200);
+    expect(res1.status).toBe(402);
 
-    // Second request with SAME signature and timestamp should fail
+    // Second request with SAME signature and timestamp should fail with Replay detected
     const res2 = await worker.fetch(new Request('http://localhost/store', {
       method: 'POST',
       headers,
@@ -106,7 +129,6 @@ describe('Storage Operations', () => {
   });
 
   test('Prevents unauthorized retrieval', async () => {
-    // Evil DID
     const evilPriv = crypto.getRandomValues(new Uint8Array(32));
     const evilPub = await ed.getPublicKey(evilPriv);
     const combinedEvil = new Uint8Array(multicodec.length + evilPub.length);
@@ -114,8 +136,8 @@ describe('Storage Operations', () => {
     combinedEvil.set(evilPub, multicodec.length);
     const EVIL_DID = `did:key:z${bs58.encode(combinedEvil)}`;
 
-    // Store something first
-    const timestamp = Date.now();
+    // Store something first (using DEV_MODE)
+    const timestamp = Date.now() + 40;
     const payload = { ciphertext: 'private_data', durationHours: 1 };
     const sig = await signRequest('POST', '/store', JSON.stringify(payload), timestamp);
     const storeRes = await worker.fetch(new Request('http://localhost/store', {
@@ -124,17 +146,16 @@ describe('Storage Operations', () => {
         'Content-Type': 'application/json',
         'X-DID': MY_DID,
         'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString(),
-        'X-Payment': 'preimage_100_ok'
+        'X-DID-Timestamp': timestamp.toString()
       },
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     const { storageId } = await storeRes.json() as any;
 
     // Try retrieve as Evil DID
-    const evilTimestamp = Date.now();
-    const emptyBodyHash = sha256(new Uint8Array(0));
-    const evilRequestHash = sha256(new TextEncoder().encode(`${evilTimestamp}GET/retrieve/${storageId}${Buffer.from(emptyBodyHash).toString('hex')}`));
+    const evilTimestamp = Date.now() + 50;
+    const emptyBodyHash = Buffer.from(sha256(new Uint8Array(0))).toString('hex');
+    const evilRequestHash = sha256(new TextEncoder().encode(`${evilTimestamp}GET/retrieve/${storageId}${emptyBodyHash}`));
     const evilSig = Buffer.from(await ed.sign(evilRequestHash, evilPriv)).toString('hex');
 
     const retrieveRes = await worker.fetch(new Request(`http://localhost/retrieve/${storageId}`, {

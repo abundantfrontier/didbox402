@@ -20,15 +20,22 @@ describe('DidBoxClient', () => {
 
   it('automatically handles 402 challenge-response flow', async () => {
     const mockInvoice = 'lnbc100n1p...';
-    const mockPreimage = 'preimage_100_abc';
+    const mockMacaroon = Buffer.from(JSON.stringify({ 
+      amount: 100, 
+      paymentHash: 'hash', 
+      _mock_preimage: 'preimage_100_ok' 
+    })).toString('base64');
 
     // 1. First call returns 402
     (global.fetch as any)
       .mockResolvedValueOnce({
         status: 402,
         ok: false,
-        headers: new Headers({ 'X-Invoice': mockInvoice }),
-        json: async () => ({ amount_satoshis: 100, invoice: mockInvoice }),
+        headers: new Headers({ 
+          'WWW-Authenticate': `L402 macaroon="${mockMacaroon}", invoice="${mockInvoice}"`,
+          'X-Amount': '100'
+        }),
+        json: async () => ({ amount_satoshis: 100 }),
         text: async () => 'Payment Required'
       })
       // 2. Second call (retry) returns 200
@@ -43,9 +50,9 @@ describe('DidBoxClient', () => {
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(result.storageId).toBe('box-123');
     
-    // Verify retry had the payment header
+    // Verify retry had the Authorization header
     const secondCallHeaders = (global.fetch as any).mock.calls[1][1].headers;
-    expect(secondCallHeaders.get('X-Payment')).toBeDefined();
+    expect(secondCallHeaders.get('Authorization')).toContain('L402');
   });
 
   it('throws error if autoPay is false and 402 is received', async () => {

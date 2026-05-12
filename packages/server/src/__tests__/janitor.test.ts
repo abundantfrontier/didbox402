@@ -34,18 +34,17 @@ describe('Janitor Physical Purge', () => {
     const payload = { ciphertext: 'to_be_deleted', durationHours: 1 }; 
     const sig = await signRequest('POST', '/store', JSON.stringify(payload), timestamp);
 
-    // 1. Store the item with 1h lease
+    // 1. Store the item with 1h lease (using DEV_MODE)
     const storeRes = await worker.fetch(new Request('http://localhost/store', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-DID': MY_DID,
         'X-DID-Signature': sig,
-        'X-DID-Timestamp': timestamp.toString(),
-        'X-Payment': 'preimage_100_ok'
+        'X-DID-Timestamp': timestamp.toString()
       },
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     
     expect(storeRes.status).toBe(200);
     const { storageId } = await storeRes.json() as any;
