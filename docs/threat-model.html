@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.4.0) | Threat Model</title>
+    <title>didbox402 (v0.5.0) | Threat Model</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -26,9 +26,9 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Shield: Threat Model <span style="font-size: 0.5em; opacity: 0.7;">v0.4.0</span></h1>
+        <h1>The Shield: Threat Model <span style="font-size: 0.5em; opacity: 0.7;">v0.5.0</span></h1>
 
-        <p>didbox402 v0.4.0 significantly hardens the protocol against interception and replay attacks.</p>
+        <p>didbox402 v0.5.0 significantly hardens the protocol against interception and replay attacks.</p>
 
         <div class="threat-category">
             <h3>1. Metadata Leakage (The Social Graph)</h3>
@@ -50,7 +50,7 @@
             <h3>3. Replay Attacks</h3>
             <p><strong>Threat:</strong> An attacker intercepts a signed storage request and resubmits it to drain funds or overwrite data.</p>
             <div class="mitigation">
-                v0.4.0 Mitigation: Mandatory <strong>Nonce Tracking</strong> and <strong>Temporal Binding</strong>. Signatures are single-use and expire after 5 minutes.
+                v0.5.0 Mitigation: Mandatory <strong>Nonce Tracking</strong> and <strong>Temporal Binding</strong>. Signatures are single-use and expire after 5 minutes.
             </div>
         </div>
 
@@ -58,7 +58,7 @@
             <h3>4. Infrastructure DoS (Janitor)</h3>
             <p><strong>Threat:</strong> Malicious actors trigger the Janitor endpoint to perform expensive cleanup operations or disrupt service.</p>
             <div class="mitigation">
-                v0.4.0 Mitigation: Mandatory <strong>X-Admin-Token</strong> requirement for all Janitor operations.
+                v0.5.0 Mitigation: Mandatory <strong>X-Admin-Token</strong> requirement for all Janitor operations.
             </div>
         </div>
 
