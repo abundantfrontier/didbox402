@@ -1,11 +1,21 @@
 {
   "name": "@didbox/conformance",
   "version": "0.6.0",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "bin": {
+    "didbox-conformance": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "scripts": {
+    "build": "tsc",
     "test": "echo 'Conformance suite is meant to be run by implementers'"
   },
   "dependencies": {
+    "commander": "^12.0.0",
     "vitest": "^1.5.0",
     "@didbox/sdk-core": "^0.6.0",
     "@didbox/sdk-crypto": "^0.6.0"

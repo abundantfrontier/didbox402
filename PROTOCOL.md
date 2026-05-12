@@ -1,6 +1,14 @@
 # didbox402 Protocol Specification (v0.6.0)
 
-**didbox402** is an agent-native protocol for ephemeral, paid, and verifiable storage. It facilitates trustless data handoff between autonomous entities using Decentralized Identifiers (DIDs) and micropayments.
+**didbox402** is an agent-native open protocol for ephemeral, paid, and verifiable storage. It facilitates trustless data handoff between autonomous entities using Decentralized Identifiers (DIDs) and micropayments.
+
+---
+
+## 0. Protocol vs. Product
+
+This document defines the **didbox402 Protocol**. It specifies the mandatory rules for authentication, economics, and storage that any compliant implementation MUST follow.
+
+**Commercial products** (such as specialized hosting nodes or agent platforms) build on top of this protocol. Products MAY offer additional features (UI, dashboards, multi-chain rails) as long as they maintain compatibility with the core spec defined here.
 
 ---
 
@@ -88,7 +96,44 @@ Nodes MUST NOT store raw recipient DIDs in lookup indexes. All identifiers MUST 
 
 ---
 
-## 6. Conformance
+## 6. Capability Discovery
+
+Compliant nodes MUST advertise their capabilities at `/.well-known/didbox-configuration`.
+
+### 6.1 Configuration Schema
+```json
+{
+  "protocol_version": "0.6.0",
+  "supported_rails": ["L402", "x402"],
+  "limits": {
+    "max_payload_bytes": 10485760,
+    "max_lease_hours": 8760
+  },
+  "endpoints": {
+    "store": "/store",
+    "retrieve": "/retrieve/:id",
+    "inbox": "/inbox/:alias",
+    "price": "/price"
+  }
+}
+```
+
+---
+
+## 7. Versioning & Compatibility
+
+didbox402 follows semantic versioning for the protocol.
+
+### 7.1 Backward Compatibility
+- **Minor Updates:** MUST remain backward compatible with existing clients.
+- **Major Updates:** MAY introduce breaking changes. Nodes SHOULD support the previous major version for a transition period.
+
+### 7.2 Deprecation Policy
+Features marked as DEPRECATED will be removed in the next Major version.
+
+---
+
+## 8. Conformance
 
 Implementations are considered compliant only if they pass the **Testing Gauntlet**:
 1. **Economic Integrity:** Rejects without payment, enforces 1MB min charge.

@@ -2,56 +2,58 @@
 
 **"A vending machine for privacy."**
 
-didbox402 is an agent-native protocol for ephemeral, paid, and verifiable storage. It enables autonomous software entities (agents, LLMs) to lease temporary storage "boxes" using Decentralized Identifiers (DIDs) and standardized micropayments (L402 & x402).
+didbox402 is an agent-native open protocol for ephemeral, paid, and verifiable storage. It enables autonomous software entities (agents, LLMs) to lease temporary storage "boxes" using Decentralized Identifiers (DIDs) and standardized micropayments (L402 & x402).
 
-## Status: v0.6.0 (Open Protocol Release)
+---
 
-This repository serves as the official specification and reference implementation for the didbox402 protocol.
+## Status: v0.6.0 (Unified Open Protocol)
 
-## Core Features
+This repository serves as the definitive specification and reference ecosystem for the didbox402 standard.
+
+### Core Features
 - **Ephemeral Leases:** Storage is a time-bound lease. Data is automatically purged upon expiration.
-- **Dual-Rail Payments:** Support for real **L402 (Lightning)** and **x402 (USDC/Base)** production rails.
-- **Cryptographic Sovereignty:** Real **Ed25519** authentication with strict signature binding and replay protection.
-- **Absolute Privacy:** Salted DID hashing ensures no raw identity data ever touches the database.
-- **Modular SDK:** Reusable packages for agents to autonomously negotiate payments and manage cryptographic state.
+- **Dual-Rail Standards:** Native support for **L402 (Lightning)** and **x402 (Web3/USDC)** payments.
+- **Cryptographic Sovereignty:** Ed25519 authentication with strict temporal binding and replay protection.
+- **Absolute Privacy:** Mandatory salted hashing ensures identity data is never discoverable by node operators.
+- **Infrastructure Agnostic:** Designed to run on Cloudflare, AWS, GCP, or Bare Metal.
+
+---
+
+## Protocol vs. Product
+**didbox402 is an open protocol.** This repository contains the standards and the reference implementation. 
+Commercial providers (such as **Omnibond**) build production services on top of this protocol, offering high-durability storage, enterprise compliance, and advanced agent toolkits.
+
+---
 
 ## Repository Structure
-- **`PROTOCOL.md`**: The definitive technical specification.
-- **`packages/server`**: The reference didbox402 node (Cloudflare Workers + R2 + D1).
-- **`packages/sdk-core`**: The base protocol client for agents.
-- **`packages/sdk-crypto`**: Real Ed25519 `did:key` identity utilities.
-- **`packages/sdk-payments`**: Standardized L402/x402 negotiation logic.
-- **`docs/`**: Comprehensive implementer and architectural documentation.
+- **`PROTOCOL.md`**: The official technical specification.
+- **`packages/conformance`**: The Protocol Conformance Suite for third-party implementers.
+- **`packages/server`**: The Cloudflare Workers reference node.
+- **`packages/sdk-*`**: Reusable TypeScript modules for agents and clients.
+- **`docs/`**: Implementer guides and architectural documentation.
 
-## Quick Start
+## Quick Start (v0.6.0)
 
 ### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Run the Conformance Tests
-Verify protocol compliance across all packages:
+### 2. Verify Compliance
+Run the testing gauntlet to verify protocol integrity:
 ```bash
 npm test --workspaces
 ```
 
-### 3. Run the Reference Node (Local)
+### 3. Run the Reference Node
 ```bash
-cd packages/server
-npx wrangler dev
-```
-
-### 4. Integration Demo
-See a real agentic flow with automated payment negotiation:
-```bash
-npx ts-node scripts/demo.ts
+cd packages/server && npx wrangler dev
 ```
 
 ## Documentation
-- **[Formal Protocol Specification](PROTOCOL.md)**
-- **[Implementer's Guide](docs/implementer-guide.html)** (Coming soon in v0.6.0)
-- **[High-Contrast Documentation Suite](docs/index.html)**
+- **[Implementer's Guide](docs/implementer-guide.html)**: Building your own compliant node.
+- **[Formal Specification](PROTOCOL.md)**: The definitive rulebook.
+- **[Extension Points](docs/extensions.html)**: How to customize and commercialize.
 
 ## License
 Open Core - Built at [adaptivefrontier.org](https://adaptivefrontier.org).

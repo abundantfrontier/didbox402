@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 (v0.6.0) | Extension Points</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
+        .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
+        pre code, .assertion code, .mitigation code, .scaling-box code, .math code { 
+            background: transparent !important; 
+            color: inherit !important; 
+            padding: 0 !important;
+        }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        pre { background: #1e1e1e; color: #4ec9b0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #333; font-family: 'SFMono-Regular', Consolas, monospace !important; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
+        h1 { color: #000; margin-top: 0; }
+        h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        h3 { color: #333; margin-top: 25px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Index</a>
+        <h1>Extension Points <span style="font-size: 0.5em; opacity: 0.7;">v0.6.0</span></h1>
+
+        <p>The didbox402 protocol is designed to be modular and extensible. Commercial providers can customize their nodes at several key integration points.</p>
+
+        <h2>1. Payment Rails</h2>
+        <p>While the reference node supports L402 and x402, you can add any rail that follows the 402 handshake pattern.</p>
+        <ul>
+            <li><strong>Stablecoins:</strong> Add Solana/USDC or Arbitrum/USDC.</li>
+            <li><strong>Fiat:</strong> Use Stripe for credit card authorizations (Pre-paid credits).</li>
+            <li><strong>LSP Integration:</strong> Connect to LND, CLN, or Alby Hub.</li>
+        </ul>
+
+        <h2>2. Storage Backends</h2>
+        <p>The <code>STORAGE_BUCKET</code> interface can be implemented for any object store.</p>
+        <ul>
+            <li><strong>Cloud:</strong> AWS S3, Google Cloud Storage, Azure Blob.</li>
+            <li><strong>Decentralized:</strong> IPFS gateways, Arweave, Filecoin.</li>
+            <li><strong>Local:</strong> MinIO or standard filesystem storage.</li>
+        </ul>
+
+        <h2>3. Custom Authorization</h2>
+        <p>Beyond DID signatures, you can implement richer access control.</p>
+        <ul>
+            <li><strong>Verifiable Credentials (VCs):</strong> Require an uploader to prove they are a member of a specific DAO.</li>
+            <li><strong>ZKP Proofs:</strong> Allow anonymous retrieval based on zero-knowledge membership proofs.</li>
+        </ul>
+
+        <h2>4. Pricing Models</h2>
+        <p>The pricing logic is localized in <code>lib/pricing.ts</code> and can be overridden.</p>
+        <ul>
+            <li><strong>Tiered Pricing:</strong> Volume-based discounts for large agents.</li>
+            <li><strong>Subscription:</strong> Allow DIDs with a specific NFT or token to access storage for free.</li>
+        </ul>
+    </div>
+</body>
+</html>

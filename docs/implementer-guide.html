@@ -94,8 +94,66 @@ PAYMENT-REQUIRED: {base64_requirements}</code></pre>
             </ul>
         </section>
 
+        <section id="practical-examples">
+            <h2>Practical Implementation Examples</h2>
+            
+            <h3>Example: Minimal Hono Server (Node.js)</h3>
+            <p>This snippet demonstrates how to implement the core 402 challenge flow in a standard Node.js server using Hono.</p>
+            <pre><code>import { Hono } from 'hono';
+
+const app = new Hono();
+
+app.post('/store', async (c) => {
+  const paymentProof = c.req.header('Authorization'); // or PAYMENT-SIGNATURE
+  
+  if (!paymentProof) {
+    // Issue L402 Challenge
+    c.header('WWW-Authenticate', 'L402 macaroon="...", invoice="lnbc..."');
+    return c.json({ error: 'Payment Required', amount_satoshis: 100 }, 402);
+  }
+
+  // 1. Verify DID Signature (Shield)
+  // 2. Verify Payment Proof (Rail)
+  // 3. Store Data (Engine)
+  
+  return c.json({ storageId: 'uuid-123' });
+});
+
+export default app;</code></pre>
+
+            <h3>Example: Manual Client-Side 402 Handling</h3>
+            <p>If you choose not to use the Intelligent Interceptor, you can handle the economic handshake manually as follows:</p>
+            <pre><code>try {
+  const res = await client.store(payload, 24);
+} catch (err) {
+  if (err.status === 402) {
+    const { invoice } = err.challenge;
+    console.log(`Payment required. Paying invoice: ${invoice}`);
+    
+    // 1. User/Agent pays the invoice
+    const { preimage } = await myWallet.pay(invoice);
+    
+    // 2. Retry with the proof
+    const finalRes = await client.store(payload, 24, { payment: preimage });
+    console.log('Successfully stored after payment:', finalRes.storageId);
+  }
+}</code></pre>
+        </section>
+
+        <section id="outside-cloudflare">
+            <h2>7. Running Outside Cloudflare</h2>
+            <p>To ensure true protocol neutrality, didbox402 can be deployed on standard cloud providers or bare metal.</p>
+            <h3>Storage Alternatives</h3>
+            <ul>
+                <li><strong>BLOB:</strong> Use the S3-compatible API (supported by AWS S3, GCS, and MinIO).</li>
+                <li><strong>Metadata:</strong> Swap D1 for PostgreSQL or MySQL.</li>
+            </ul>
+            <h3>Compute Portability</h3>
+            <p>The Hono framework runs on any Node.js, Deno, or Bun runtime. You can deploy as a Docker container or a serverless function (AWS Lambda / Google Cloud Functions).</p>
+        </section>
+
         <section id="conformance">
-            <h2>6. Conformance & Testing</h2>
+            <h2>8. Conformance & Testing</h2>
             <p>Use the <code>@didbox/conformance</code> suite to validate your implementation. Your node must pass the following scenarios:</p>
             <ul>
                 <li><strong>Auth:</strong> Replay rejection, drift window enforcement, malformed DID rejection.</li>
