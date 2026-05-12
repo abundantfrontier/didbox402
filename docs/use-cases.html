@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>didbox402 (v0.6.1) | Use Cases</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
+        .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
+        pre code, .assertion code, .mitigation code, .scaling-box code, .math code { 
+            background: transparent !important; 
+            color: inherit !important; 
+            padding: 0 !important;
+        }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        pre { background: #1e1e1e; color: #4ec9b0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #333; font-family: 'SFMono-Regular', Consolas, monospace !important; }
+        .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
+        h1 { color: #000; margin-top: 0; }
+        h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        h3 { color: #333; margin-top: 25px; }
+        .pattern-box { border-left: 5px solid #007aff; background: #f0f7ff; padding: 20px; margin: 20px 0; border-radius: 4px; }
+        .benefit-list { list-style: none; padding: 0; }
+        .benefit-list li::before { content: "✅ "; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Index</a>
+        <h1>Practical Use Cases <span style="font-size: 0.5em; opacity: 0.7;">v0.6.1</span></h1>
+
+        <p>This document describes real-world usage patterns built on top of the <strong>didbox402 protocol</strong>. These patterns demonstrate how the core primitives of ephemeral, paid, and verifiable storage can be applied in practice.</p>
+
+        <section id="single-use-handoff">
+            <h2>Single-Use DID Handoff</h2>
+            <p>The <strong>Single-Use DID Handoff</strong> pattern allows two parties (humans or agents) to securely exchange their long-term DIDs and public keys using a temporary, short-lived didbox inbox.</p>
+
+            <div class="pattern-box">
+                <strong>The Problem:</strong> Bootstrapping secure communication over insecure channels (like email) without exposing permanent identities early.
+            </div>
+
+            <h3>The Pattern</h3>
+            <ol>
+                <li><strong>Create Temporary Inbox:</strong> Alice generates a temporary DID and creates a short-lived didbox inbox (e.g., 1-24 hour lease).</li>
+                <li><strong>Share Location:</strong> Alice sends the temporary address to Bob via email or another channel.</li>
+                <li><strong>Identity Deposit:</strong> Bob writes his <strong>real long-term DID</strong> and public key into that temporary inbox.</li>
+                <li><strong>Retrieval:</strong> Alice reads Bob's real DID and begins secure communication in their permanent, long-term channels.</li>
+                <li><strong>Self-Destruct:</strong> The handoff inbox automatically expires and is purged by the Janitor.</li>
+            </ol>
+
+            <h3>Human-to-Human Exchange</h3>
+            <p>Provides a simple, relatively secure way to bootstrap encrypted communication:</p>
+            <ul>
+                <li>Share links via QR codes or messaging apps.</li>
+                <li>Clients handle the background DID generation and encryption.</li>
+                <li>Minimizes exposure of long-term identities over insecure channels.</li>
+            </ul>
+
+            <h3>Agent-to-Agent Exchange</h3>
+            <p>Enables autonomous systems to establish secure, long-term relationships without human intervention:</p>
+            <ul>
+                <li>Agents programmatically discover handoff locations.</li>
+                <li>Support for capability-based access control (e.g., one-time write tokens).</li>
+                <li>Mutual handoffs (both parties exchanging temporary inboxes simultaneously).</li>
+            </ul>
+
+            <h3>Benefits of This Pattern</h3>
+            <ul class="benefit-list">
+                <li>Reduces exposure of long-term identity over insecure links.</li>
+                <li>Leverages existing protocol features (Expiration, L402 Macaroons).</li>
+                <li>Naturally limits the attack window via ephemerality.</li>
+            </ul>
+
+            <h3>Implementation Notes</h3>
+            <p>This pattern requires NO changes to the core protocol. It utilizes:</p>
+            <ul>
+                <li>Short-lived inboxes via <code>expires_at</code>.</li>
+                <li>Client-side E2EE for the handoff payload.</li>
+                <li>Capability discovery via <code>/.well-known/didbox-configuration</code>.</li>
+            </ul>
+        </section>
+
+        <section id="human-to-agent">
+            <h2>Secure Results Drop-off (Human-to-Agent)</h2>
+            <p>In this pattern, a human leases a "Secure Drop-off Box" for an autonomous agent to deliver results once a long-running task is complete.</p>
+
+            <div class="pattern-box">
+                <strong>The Problem:</strong> A human wants an agent to perform a task and deliver a potentially large or sensitive report without maintaining a permanent server or shared account.
+            </div>
+
+            <h3>The Pattern</h3>
+            <ol>
+                <li><strong>Human Provisions Box:</strong> The human creates a didbox lease for 48 hours, specifying the agent's DID as the <code>recipientDid</code>.</li>
+                <li><strong>Link Sharing:</strong> The human provides the <code>storageId</code> (and potentially the node URL) to the agent as part of the task instructions.</li>
+                <li><strong>Agent Delivers:</strong> Once the task is finished, the agent encrypts the result and performs a <code>POST /extend</code> (if needed) or simply writes to an agreed-upon inbox alias.</li>
+                <li><strong>Human Retrieves:</strong> The human retrieves the report at their convenience.</li>
+            </ol>
+
+            <h3>Benefits</h3>
+            <ul class="benefit-list">
+                <li><strong>Zero-Account Interaction:</strong> No need for the agent to have an AWS/Dropbox account.</li>
+                <li><strong>Pre-paid Convenience:</strong> The human (the employer) pays the storage fee upfront.</li>
+                <li><strong>Automatic Cleanup:</strong> Sensitive reports vanish once the lease expires.</li>
+            </ul>
+        </section>
+
+        <section id="agent-to-human">
+            <h2>Verified Data Request (Agent-to-Human)</h2>
+            <p>An autonomous agent creates a paid "Inbound Box" and requests a specific piece of data from a human user.</p>
+
+            <div class="pattern-box">
+                <strong>The Problem:</strong> An agent needs a human to provide a specific file (e.g., a signed PDF or KYC document) but wants to make the process frictionless for the human.
+            </div>
+
+            <h3>The Pattern</h3>
+            <ol>
+                <li><strong>Agent Creates Inbox:</strong> The agent calls <code>POST /inboxes</code> with a custom alias (e.g., <code>"contract-upload"</code>) and pays the provisioning fee.</li>
+                <li><strong>Request Sent:</strong> The agent sends a link to the human (via email or frontend) pointing to this paid inbox.</li>
+                <li><strong>Human Uploads:</strong> The human uses a simple web client to upload the file. Since the agent already provisioned the inbox, the human's UX is frictionless.</li>
+                <li><strong>Agent Processes:</strong> The agent monitors the inbox, retrieves the data, and proceeds with its workflow.</li>
+            </ol>
+
+            <h3>Benefits</h3>
+            <ul class="benefit-list">
+                <li><strong>Agent-Led Economics:</strong> The agent manages its own budget to facilitate human contributions.</li>
+                <li><strong>Scoped Privacy:</strong> The human only sees and interacts with the specific inbox alias intended for them.</li>
+                <li><strong>Stateless Collection:</strong> The agent doesn't need to host a complex file-upload server.</li>
+            </ul>
+        </section>
+
+        <section id="contributing">
+            <h2>Contributing</h2>
+            <p>If you have additional use cases or improvements, feel free to open a discussion or pull request on our [GitHub](https://github.com/adaptivefrontier/didbox402).</p>
+        </section>
+    </div>
+</body>
+</html>

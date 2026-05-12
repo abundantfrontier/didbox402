@@ -1,0 +1,95 @@
+# Future Directions & Open Questions
+
+This document captures strategic questions and potential directions for **didbox402** that go beyond the current scope of the protocol (as of v0.6.1). These topics are intended as areas for future exploration rather than committed roadmap items.
+
+---
+
+## Core Foundation: Client-Driven Key Management
+
+**A foundational principle of didbox402 is that key management is always client-driven.**
+
+The protocol is explicitly designed so that:
+1.  **Nodes hold no decryption keys:** Ciphertext stored on didbox402 is opaque to the node operator.
+2.  **Nodes hold no signing keys for agents:** Identity is proven via DID signatures generated exclusively by the client/agent.
+3.  **No Server-Side Key Escrow:** The protocol does not support or provide any mechanism for server-side key storage or recovery.
+
+Any future evolution of the protocol MUST adhere to this principle of **Cryptographic Sovereignty**.
+
+---
+
+## Sovereign Mobility
+
+**What does cross-node movement of boxes look like while preserving “client owns the keys”?**
+
+One of the core principles of didbox402 is that **clients retain full control of their cryptographic keys**. This creates interesting challenges when considering the movement of stored data between independent nodes.
+
+### Key Questions
+- How can a box (or its lease) be transferred from one didbox node to another without the client having to re-upload the data?
+- What cryptographic or authorization mechanisms would allow a new node to verify ownership of an existing box?
+- Should box migration be a first-class protocol feature, or should it be handled entirely at the client or commercial layer?
+- How do we maintain privacy and unlinkability during and after a move?
+
+### Considerations
+- Any migration mechanism must not require the client to reveal private keys to nodes.
+- There may be a need for time-limited, signed “migration tokens” or capability-based proofs.
+- Commercial providers may want different policies around data portability.
+
+### Possible Directions to Explore
+- Client-mediated migration (client coordinates between two nodes)
+- Cryptographic delegation of box ownership
+- Temporary dual-lease models during transition
+- Keeping migration entirely out of the core protocol
+
+---
+
+## Multi-Node Federation
+
+**How much (if any) federation should the core protocol support versus leaving to commercial layers?**
+
+didbox402 is currently designed around independent nodes. However, as adoption grows, there may be value in allowing nodes to interoperate in limited ways.
+
+### Key Questions
+- Should the protocol define any mechanisms for nodes to discover or communicate with each other?
+- To what extent should cross-node data access or coordination be supported natively?
+- What are the privacy and security implications of introducing federation primitives?
+- Should federation features be optional extensions, or should they remain entirely out of scope for the core protocol?
+
+### Considerations
+- Strong federation can increase complexity and attack surface significantly.
+- Many federation-like features can be achieved through client coordination instead of protocol-level support.
+- Commercial providers may have different incentives and trust models than the open protocol.
+
+### Possible Directions to Explore
+- Minimal capability discovery between nodes (already partially addressed via `/.well-known/didbox-configuration`)
+- Optional federation extensions (kept separate from the core spec)
+- Keeping federation concerns entirely in the commercial / application layer
+
+---
+
+## Agent-Native Features
+
+**Should advanced agent features (auto-extend, session budgets, pre-authorized payments, etc.) stay in commercial products or eventually move into the protocol?**
+
+Many powerful features for autonomous agents — such as automatic lease renewal, session-based credit systems, or pre-authorized spending — add significant convenience. However, they also increase the scope and complexity of the protocol.
+
+### Key Questions
+- What is the right boundary between core protocol functionality and commercial/product innovation?
+- Which agent-centric features are fundamental enough that they should be standardized?
+- How do we avoid bloating the protocol with features that only some users need?
+- Should these features be implemented as optional extensions, or remain entirely in the domain of SDKs and commercial offerings?
+
+### Considerations
+- Keeping the protocol small and focused improves interoperability and auditability.
+- Many advanced agent behaviors can be implemented client-side or through higher-level SDKs without protocol changes.
+- Standardizing too early can limit experimentation by commercial providers.
+
+### Possible Directions to Explore
+- Define a clear set of “core protocol” vs “agent experience layer” responsibilities
+- Create optional protocol extensions for common agent patterns
+- Encourage advanced features to live primarily in SDKs and commercial implementations
+
+---
+
+## How to Contribute to These Discussions
+
+Feedback and ideas on these topics are welcome. As didbox402 matures, these questions may evolve into more concrete proposals or extensions. For now, they are documented as open areas of exploration to guide long-term thinking.

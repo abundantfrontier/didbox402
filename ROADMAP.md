@@ -24,6 +24,8 @@ This roadmap outlines the planned evolution of the **didbox402** protocol and re
 ## Long-Term Vision (v1.0.0 and beyond)
 **Goal:** A global, decentralized network of didbox402 nodes powering the agentic economy.
 
+For a detailed exploration of strategic questions and potential directions, see **[FUTURE.md](FUTURE.md)**.
+
 ### Focus Areas:
 - **Registry & Discovery:** Decentralized discovery of didbox402 nodes and their configurations.
 - **Advanced Privacy:** Integration of Zero-Knowledge Proofs (ZKPs) for truly anonymous storage retrieval.
