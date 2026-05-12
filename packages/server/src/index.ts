@@ -103,7 +103,18 @@ app.get('/inboxes', async (c) => {
  */
 app.post('/store', async (c) => {
   const { ciphertext, durationHours, recipientDid, inboxAlias } = await getJsonBody(c);
+  
+  // 1. Enforce Max Duration (1 Year = 8760 hours)
+  if (durationHours > 8760) {
+    return c.json({ error: 'Max duration is 8760 hours (1 year)' }, 400);
+  }
+
   const sizeBytes = new TextEncoder().encode(ciphertext).length;
+  
+  // 2. Enforce Payload Size Limit (10MB for MVP)
+  if (sizeBytes > 10 * 1024 * 1024) {
+    return c.json({ error: 'Payload too large (Max 10MB)' }, 413);
+  }
 
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
   const price = calculateStoragePrice(sizeBytes, durationHours, baseRate);
