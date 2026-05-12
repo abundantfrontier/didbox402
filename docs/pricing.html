@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.3.0) | Dynamic Pricing</title>
+    <title>didbox402 (v0.4.0) | Dynamic Pricing</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -32,7 +32,7 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Economics: Dynamic Pricing <span style="font-size: 0.5em; opacity: 0.7;">v0.3.0</span></h1>
+        <h1>The Economics: Dynamic Pricing <span style="font-size: 0.5em; opacity: 0.7;">v0.4.0</span></h1>
 
         <p>Storage on the edge is a finite resource. didbox402 uses a predictable pricing model to ensure the service pays for its own infrastructure while remaining accessible.</p>
 
@@ -51,17 +51,27 @@
         </ul>
 
         <div class="rail-box">
-            <strong>The x402 Rail:</strong> For the MVP, we use the <strong>Lightning Network</strong>. The <code>X-Payment</code> header contains a simple preimage proof of a settled BOLT11 invoice.
+            <strong>Dual-Rail Support:</strong> v0.4.0 supports both <strong>L402 (Standard Lightning)</strong> and <strong>x402 (Credit/Prepaid)</strong> rails.
         </div>
 
         <h2>Payment Specification</h2>
-        <p>didbox402 nodes act as <strong>Lightning Service Providers (LSPs)</strong>. The payment flow follows the 402 standard:</p>
+        <p>The payment flow follows the 402 standard with dual-rail support:</p>
         
         <ol>
-            <li><strong>Discovery:</strong> Client sends a request without a payment header.</li>
-            <li><strong>Challenge:</strong> Server responds with <code>402 Payment Required</code> and an <code>X-Invoice</code> header.</li>
-            <li><strong>Settlement:</strong> Client pays the invoice via their Lightning node.</li>
-            <li><strong>Proof:</strong> Client retries with <code>X-Payment: {preimage}</code>.</li>
+            <li><strong>Discovery:</strong> Client sends a request without an authorization header.</li>
+            <li><strong>Challenge:</strong> Server responds with <code>402 Payment Required</code>.
+                <ul>
+                    <li>For <strong>L402</strong>: <code>WWW-Authenticate: L402 macaroon="{m}", invoice="{i}"</code></li>
+                    <li>For <strong>x402</strong>: <code>X-Invoice: {i}</code></li>
+                </ul>
+            </li>
+            <li><strong>Settlement:</strong> Client pays the invoice via their preferred rail.</li>
+            <li><strong>Proof:</strong> Client retries the request:
+                <ul>
+                    <li>For <strong>L402</strong>: <code>Authorization: L402 {macaroon}:{preimage}</code></li>
+                    <li>For <strong>x402</strong>: <code>X-Payment: {preimage}</code></li>
+                </ul>
+            </li>
         </ol>
 
         <h2>Egress-Aware Pricing</h2>

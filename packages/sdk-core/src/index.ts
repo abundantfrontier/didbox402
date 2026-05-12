@@ -25,19 +25,34 @@ export class DidBoxClient {
 
     const res = await fetch(`${this.config.baseUrl}${path}`, { ...options, headers });
     
-    // Automated 402 Negotiation
+    // Automated 402 Negotiation (L402 and x402)
     if (res.status === 402 && this.config.autoPay) {
-      const data: any = await res.json();
-      const amount = data.amount_satoshis;
-      const invoice = res.headers.get('X-Invoice') || data.invoice;
+      const l402Challenge = res.headers.get('WWW-Authenticate');
+      const x402Challenge = res.headers.get('PAYMENT-REQUIRED');
       
-      const { preimage } = await negotiatePayment(amount, invoice);
-      
-      // Retry with payment header
-      const retryHeaders = new Headers(headers);
-      retryHeaders.set('X-Payment', preimage);
-      
-      return fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
+      let preimage: string | undefined;
+
+      if (l402Challenge?.startsWith('L402 ')) {
+         // L402 Flow
+         const parts = l402Challenge.substring(5).split(',').reduce((acc: any, part) => {
+           const [key, value] = part.trim().split('=');
+           acc[key] = value.replace(/"/g, '');
+           return acc;
+         }, {});
+         
+         const { preimage: p } = await negotiatePayment(parseInt(res.headers.get('X-Amount') || '0'), parts.invoice);
+         // L402 requires Authorization: L402 macaroon:preimage
+         const retryHeaders = new Headers(headers);
+         retryHeaders.set('Authorization', `L402 ${parts.macaroon}:${p}`);
+         return fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
+      } else if (x402Challenge) {
+         // x402 Flow
+         const requirements = JSON.parse(Buffer.from(x402Challenge, 'base64').toString());
+         const { preimage: p } = await negotiatePayment(requirements.amount, 'x402');
+         const retryHeaders = new Headers(headers);
+         retryHeaders.set('PAYMENT-SIGNATURE', `sig_${requirements.amount}`); // Mock sig for x402
+         return fetch(`${this.config.baseUrl}${path}`, { ...options, headers: retryHeaders });
+      }
     }
 
     return res;

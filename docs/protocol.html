@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.3.0) | Protocol Spec</title>
+    <title>didbox402 (v0.4.0) | Protocol Spec</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -13,7 +13,7 @@
             padding: 0 !important;
         }
         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        pre { background: #1e1e1e; color: #4ec9b0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #000; font-family: 'SFMono-Regular', Consolas, monospace !important; }
+        pre { background: #1e1e1e; color: #4ec9b0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.9rem; border: 1px solid #333; font-family: 'SFMono-Regular', Consolas, monospace !important; }
         .back-link { display: block; margin-bottom: 20px; color: #007aff; text-decoration: none; font-weight: bold; }
         .spec-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         .spec-table th, .spec-table td { border: 1px solid #eee; padding: 10px; text-align: left; }
@@ -21,19 +21,18 @@
         h1 { color: #000; margin-top: 0; }
         h2 { color: #007aff; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
         .anchor-box { background: #e6f7ff; border: 1px solid #91d5ff; padding: 15px; border-radius: 8px; margin: 20px 0; font-weight: bold; }
-            .assertion, pre, .mitigation, .scaling-box, .math { background: #1e1e1e !important; color: #4ec9b0 !important; }
     </style>
 </head>
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Handshake: Protocol Spec <span style="font-size: 0.5em; opacity: 0.7;">v0.3.0</span></h1>
+        <h1>The Handshake: Protocol Spec <span style="font-size: 0.5em; opacity: 0.7;">v0.4.0</span></h1>
 
         <div class="anchor-box">
-            Formal Specification: <a href="protocol-spec.html">PROTOCOL.md (v0.3.0)</a>
+            Formal Specification: <a href="protocol-spec.html">PROTOCOL.md (v0.4.0)</a>
         </div>
 
-        <p>Interaction with didbox402 is stateless and authenticated via DID-signed HTTP headers.</p>
+        <p>Interaction with didbox402 is stateless and authenticated via DID-signed HTTP headers. Version v0.4.0 introduces <strong>Unified 402 Support</strong>.</p>
 
         <h2>Required Headers</h2>
         <table class="spec-table">
@@ -52,39 +51,36 @@
                 </tr>
                 <tr>
                     <td><code>X-DID-Signature</code></td>
-                    <td>Hex-encoded Ed25519 signature of the request hash.</td>
+                    <td>Hex Ed25519 signature of the temporal request hash.</td>
                     <td><code>abcd123...</code></td>
                 </tr>
                 <tr>
                     <td><code>X-DID-Timestamp</code></td>
-                    <td>Unix Epoch in <strong>milliseconds</strong> (UTC). Drift window: ±5m.</td>
+                    <td>Unix Epoch in <strong>milliseconds</strong> (UTC).</td>
                     <td><code>1715436000000</code></td>
                 </tr>
                 <tr>
-                    <td><code>X-Payment</code></td>
-                    <td>The x402 payment proof (preimage).</td>
-                    <td><code>preimage:...</code></td>
+                    <td><code>Authorization</code></td>
+                    <td>(Conditional) The <strong>L402</strong> payment proof.</td>
+                    <td><code>L402 <mac>:<pre></code></td>
                 </tr>
                 <tr>
-                    <td><code>X-Inbox-Alias</code></td>
-                    <td>(Optional) Target scoped inbox alias.</td>
-                    <td><code>project-x</code></td>
+                    <td><code>PAYMENT-SIGNATURE</code></td>
+                    <td>(Conditional) The <strong>x402</strong> payment proof.</td>
+                    <td><code>0x...</code></td>
                 </tr>
             </tbody>
         </table>
 
-        <h2>Replay Protection (Nonce Tracking)</h2>
-        <p>didbox402 implements mandatory <strong>Nonce Tracking</strong>. The server caches every <code>X-DID-Signature</code> within the 5-minute window. Any attempt to re-use a valid signature will be rejected with <code>401 Unauthorized</code>.</p>
+        <h2>The x402 Handshake</h2>
+        <p>didbox402 v0.4.0 nodes emit standard challenges based on the client's supported rails:</p>
+        <ul>
+            <li><strong>L402 Challenge:</strong> <code>WWW-Authenticate: L402 macaroon="...", invoice="..."</code></li>
+            <li><strong>x402 Challenge:</strong> <code>PAYMENT-REQUIRED: {Base64 requirements}</code></li>
+        </ul>
 
         <h2>Signature Binding</h2>
-        <p>To prevent tampering, the signature MUST cover the <strong>Temporal Request Hash</strong>:</p>
         <pre><code>Hash = SHA256(Timestamp + Method + Path + SHA256(Raw_Body))</code></pre>
-        
-        <p>In the reference SDK, this is generated as follows:</p>
-        <pre><code>const signature = await ed.sign(
-  sha256(`${timestamp}${method}${path}${bodyHash}`),
-  privateKey
-);</code></pre>
     </div>
 </body>
 </html>

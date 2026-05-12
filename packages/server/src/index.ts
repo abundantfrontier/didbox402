@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { verifyDidSignature, hashDid } from './middleware/did';
 import { calculateStoragePrice, calculateRetrievalPrice } from './lib/pricing';
 import { saveStorageRecord, getStorageRecord, updateExpiration, getInboxRecords, saveInbox, getInboxes, getExpiredRecords, deleteStorageRecord } from './lib/storage';
+import { verifyAnyPayment, issueDualChallenge } from './lib/payments';
 import { Env } from './types/env';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -13,37 +14,6 @@ async function getJsonBody(c: any) {
   const bodyText = c.get('bodyText');
   if (bodyText) return JSON.parse(bodyText);
   return c.req.json();
-}
-
-/**
- * Real-ish payment verification for x402.
- * LSAT-style: The payment header contains a preimage of a generated invoice.
- */
-function verifyPayment(c: any, expectedPrice: number): boolean {
-  // 1. Local Dev Mode Bypass
-  if (c.env.DEV_MODE === 'true') return true;
-
-  const paymentHeader = c.req.header('X-Payment');
-  if (!paymentHeader) return false;
-
-  // Stub: In a real LSP, we would check our DB/LND for the preimage
-  // For the MVP v0.2.0, we accept "preimage_EXPECTEDPRICE_..."
-  return paymentHeader.startsWith(`preimage_${expectedPrice}_`);
-}
-
-/**
- * Helper to issue a 402 Challenge.
- */
-function challenge402(c: any, amount: number) {
-  // In a real LSP, this would call LND to create a BOLT11 invoice
-  const mockInvoice = `lnbc${amount}n1p...mock_invoice`;
-  c.header('X-Invoice', mockInvoice);
-  return c.json({ 
-    error: 'Payment Required', 
-    amount_satoshis: amount,
-    invoice: mockInvoice,
-    message: `Please pay ${amount} Satoshis to the provided invoice and retry with X-Payment: {preimage}`
-  }, 402);
 }
 
 // All routes require DID authentication
@@ -74,8 +44,8 @@ app.post('/inboxes', async (c) => {
   const hashedId = await hashDid(did + (alias || 'default'), salt);
 
   const creationFee = parseInt(c.env.INBOX_CREATION_FEE || '1000');
-  if (!verifyPayment(c, creationFee)) {
-    return challenge402(c, creationFee);
+  if (!(await verifyAnyPayment(c, creationFee))) {
+    return issueDualChallenge(c, creationFee);
   }
 
   await saveInbox(c.env.DB, {
@@ -119,8 +89,8 @@ app.post('/store', async (c) => {
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
   const price = calculateStoragePrice(sizeBytes, durationHours, baseRate);
 
-  if (!verifyPayment(c, price)) {
-    return challenge402(c, price);
+  if (!(await verifyAnyPayment(c, price))) {
+    return issueDualChallenge(c, price);
   }
 
   const storageId = crypto.randomUUID();
@@ -220,8 +190,8 @@ app.post('/extend/:id', async (c) => {
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
   const extraCost = calculateStoragePrice(record.size_bytes, additionalHours, baseRate);
 
-  if (!verifyPayment(c, extraCost)) {
-    return challenge402(c, extraCost);
+  if (!(await verifyAnyPayment(c, extraCost))) {
+    return issueDualChallenge(c, extraCost);
   }
 
   const newExpiresAt = new Date(new Date(record.expires_at).getTime() + additionalHours * 3600 * 1000).toISOString();
