@@ -88,6 +88,31 @@ Many powerful features for autonomous agents — such as automatic lease renewal
 - Create optional protocol extensions for common agent patterns
 - Encourage advanced features to live primarily in SDKs and commercial implementations
 
+## Service Extensibility (Tiered Storage & Compute)
+
+**How can the protocol support different classes of storage or deterministic compute services without breaking backward compatibility?**
+
+didbox402 is designed to treat "Storage" as a generic resource lease. This model naturally extends to other types of agent-centric services.
+
+### Tiered Storage Classes
+A node could offer different performance or persistence tiers (e.g., `standard`, `mem-cache`, `encrypted-db`).
+- **Discovery:** Nodes advertise available classes and their respective `base_rates` via `/.well-known/didbox-configuration`.
+- **Request:** Clients specify a `storageClass` in the `POST /store` body.
+- **Economics:** The server returns a 402 challenge with a price corresponding to the requested tier.
+
+### Deterministic Compute Flows
+The protocol can facilitate paid, deterministic work (e.g., data transformation, WASM execution) by treating compute as a service that produces a storage box.
+- **Workflow:** 
+  1. Client sends `POST /compute` with task parameters.
+  2. Server returns a 402 challenge covering both the "Work" and the "Result Storage."
+  3. Upon payment, the server executes the task and places the result in a box scoped to the client's DID.
+  4. Client retrieves the result via the standard `GET /retrieve` or `GET /inbox` primitives.
+
+### Possible Directions to Explore
+- Standardizing a `service_type` registry in the protocol spec.
+- Defining a "Compute-as-a-Box" pattern where task status is tracked via standard storage metadata.
+- Exploring "Resource Negotiation" headers for real-time pricing of high-demand tiers.
+
 ---
 
 ## How to Contribute to These Discussions

@@ -127,6 +127,37 @@
             </ul>
         </section>
 
+        <section id="future-patterns" style="opacity: 0.8; border-top: 2px dashed #ccc; padding-top: 40px;">
+            <h2 style="color: #666;">Experimental / Future Patterns</h2>
+            <p>These patterns describe capabilities enabled by the protocol's extensible 402-based architecture but may not be implemented in all nodes.</p>
+
+            <div id="mem-cache">
+                <h3>High-Speed Coordination (Mem-Cache)</h3>
+                <p>Agents use a specialized memory-backed storage class for sub-second coordination.</p>
+                <div class="pattern-box">
+                    <strong>The Problem:</strong> Standard R2/S3-backed storage has too much latency for agents performing rapid negotiation or lock-stepping.
+                </div>
+                <ul>
+                    <li><strong>Mechanism:</strong> Client requests <code>storageClass: "mem-cache"</code>.</li>
+                    <li><strong>Performance:</strong> Node uses RAM-only storage (e.g., Redis or Durable Objects).</li>
+                    <li><strong>Economics:</strong> High base rate, very short TTLs (minutes).</li>
+                </ul>
+            </div>
+
+            <div id="compute-dropoff">
+                <h3>Autonomous Compute Drop-off</h3>
+                <p>A node performs a deterministic task and delivers the result to a DID-scoped inbox.</p>
+                <div class="pattern-box">
+                    <strong>The Problem:</strong> An agent needs to perform a heavy computation (like generating a ZK proof or resizing an image) but wants to keep the result in the same DID-verified ecosystem.
+                </div>
+                <ul>
+                    <li><strong>Mechanism:</strong> Client pays a single L402 invoice covering both the "Compute Gas" and the "Result Storage."</li>
+                    <li><strong>Delivery:</strong> The node acts as a "Virtual Agent," depositing the result into the requester's inbox.</li>
+                    <li><strong>Verifiability:</strong> The result is signed by the node's DID, ensuring provenance.</li>
+                </ul>
+            </div>
+        </section>
+
         <section id="contributing">
             <h2>Contributing</h2>
             <p>If you have additional use cases or improvements, feel free to open a discussion or pull request on our [GitHub](https://github.com/adaptivefrontier/didbox402).</p>
