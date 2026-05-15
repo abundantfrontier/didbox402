@@ -37,6 +37,12 @@ export async function verifySignature(signature: string, requestHash: Uint8Array
   return ed.verify(sigBytes, requestHash, publicKey);
 }
 
+// Sovereign Mobility (v0.7.0+)
+export {
+  verifyMigrationAuthorization,
+  type MigrationAuthorization,
+} from './migration';
+
 /**
  * Extract the Ed25519 public key from a standard did:key string.
  */

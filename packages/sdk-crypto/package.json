@@ -3,11 +3,15 @@
   "version": "0.6.2",
   "main": "src/index.ts",
   "scripts": {
-    "test": "echo 'No tests yet'"
+    "test": "vitest run"
   },
   "dependencies": {
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
-    "bs58": "^6.0.0"
+    "bs58": "^6.0.0",
+    "canonicalize": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.5.3"
   }
 }
