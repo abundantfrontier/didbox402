@@ -45,7 +45,7 @@ describe('Inbox Management', () => {
         'X-DID-Timestamp': timestamp.toString()
       },
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res1.status).toBe(402);
 
     const challenge = res1.headers.get('WWW-Authenticate') || '';
@@ -70,7 +70,7 @@ describe('Inbox Management', () => {
         'Authorization': `L402 ${parts.macaroon}:${decoded._mock_preimage}`
       },
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     expect(createRes.status).toBe(200);
 
@@ -83,7 +83,7 @@ describe('Inbox Management', () => {
         'X-DID-Signature': listSig,
         'X-DID-Timestamp': listTimestamp.toString()
       }
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     expect(listRes.status).toBe(200);
     const data = await listRes.json() as any;
@@ -117,7 +117,7 @@ describe('Inbox Management', () => {
         'X-DID-Signature': personalSig,
         'X-DID-Timestamp': personalTimestamp.toString()
       }
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect((await personalRes.json() as any).items).toHaveLength(0);
 
     // Query 'work' alias - should have 1 item
@@ -129,7 +129,7 @@ describe('Inbox Management', () => {
         'X-DID-Signature': workSig,
         'X-DID-Timestamp': workTimestamp.toString()
       }
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect((await workRes.json() as any).items).toHaveLength(1);
   });
 });

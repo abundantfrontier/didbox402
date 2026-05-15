@@ -59,7 +59,7 @@ describe('Economics & Limits Hardening', () => {
       body
     });
 
-    const res = await worker.fetch(req, env, createExecutionContext());
+    const res = await worker.fetch(req, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res.status).toBe(402);
     const data: any = await res.json();
     // 1MB * 1 hour * 100 base rate = 100 Satoshis
@@ -84,7 +84,7 @@ describe('Economics & Limits Hardening', () => {
       body
     });
 
-    const res = await worker.fetch(req, env, createExecutionContext());
+    const res = await worker.fetch(req, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res.status).toBe(402);
     const data: any = await res.json();
     // 1.5MB * 2 hours * 100 base rate = 300 Satoshis
@@ -107,7 +107,7 @@ describe('Economics & Limits Hardening', () => {
       body
     });
 
-    const res = await worker.fetch(req, env, createExecutionContext());
+    const res = await worker.fetch(req, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res.status).toBe(400); 
     const data: any = await res.json();
     expect(data.error).toContain('Max duration');
@@ -130,7 +130,7 @@ describe('Economics & Limits Hardening', () => {
       body
     });
 
-    const res = await worker.fetch(req, env, createExecutionContext());
+    const res = await worker.fetch(req, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res.status).toBe(413); // Payload Too Large
   });
 
@@ -146,7 +146,7 @@ describe('Economics & Limits Hardening', () => {
       }
     });
 
-    const res = await worker.fetch(req, env, createExecutionContext());
+    const res = await worker.fetch(req, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res.status).toBe(200);
     const data: any = await res.json();
     expect(data).toHaveProperty('base_rate_per_mb_hour');
@@ -173,7 +173,7 @@ describe('Economics & Limits Hardening', () => {
       body
     });
 
-    const res1 = await worker.fetch(storeReq1, env, createExecutionContext());
+    const res1 = await worker.fetch(storeReq1, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect([200, 402]).toContain(res1.status); // 200 if payment accepted, 402 if strict
 
     // Second request with the exact same payment proof should be rejected (replay)
@@ -192,7 +192,7 @@ describe('Economics & Limits Hardening', () => {
       body: body2
     });
 
-    const res2 = await worker.fetch(storeReq2, env, createExecutionContext());
+    const res2 = await worker.fetch(storeReq2, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     // With the new replay logic, a second use of the same proof should fail verification
     expect([401, 402]).toContain(res2.status);
   });

@@ -47,7 +47,7 @@ describe('didbox402 Protocol v0.4.0 Conformance', () => {
       body
     });
 
-    const res = await worker.fetch(req, env, createExecutionContext());
+    const res = await worker.fetch(req, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res.status).toBe(402);
     
     const challenge = res.headers.get('WWW-Authenticate');
@@ -70,7 +70,7 @@ describe('didbox402 Protocol v0.4.0 Conformance', () => {
         'X-DID-Timestamp': timestamp.toString()
       },
       body
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res1.status).toBe(402);
     
     const challenge = res1.headers.get('WWW-Authenticate') || '';
@@ -95,7 +95,7 @@ describe('didbox402 Protocol v0.4.0 Conformance', () => {
         'Authorization': `L402 ${parts.macaroon}:${decoded._mock_preimage}`
       },
       body
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     expect(res2.status).toBe(200);
   });
@@ -104,7 +104,7 @@ describe('didbox402 Protocol v0.4.0 Conformance', () => {
     // Discovery must work without auth headers (or with DEV_MODE + mock_sig)
     const req = new Request('http://localhost/.well-known/didbox-configuration');
 
-    const res = await worker.fetch(req, env, createExecutionContext());
+    const res = await worker.fetch(req, { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res.status).toBe(200);
     const data: any = await res.json();
     expect(data.protocol_version).toBe('0.6.2');

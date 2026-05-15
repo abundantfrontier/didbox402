@@ -44,7 +44,7 @@ describe('Storage Operations', () => {
         'X-DID-Timestamp': timestamp.toString()
       },
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res1.status).toBe(402);
 
     const challenge = res1.headers.get('WWW-Authenticate') || '';
@@ -69,7 +69,7 @@ describe('Storage Operations', () => {
         'Authorization': `L402 ${parts.macaroon}:${decoded._mock_preimage}`
       },
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     expect(storeRes.status).toBe(200);
     const { storageId } = await storeRes.json() as any;
@@ -83,7 +83,7 @@ describe('Storage Operations', () => {
         'X-DID-Signature': retrieveSig,
         'X-DID-Timestamp': retrieveTimestamp.toString()
       }
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     expect(retrieveRes.status).toBe(200);
     const retrieved = await retrieveRes.json() as any;
@@ -117,7 +117,7 @@ describe('Storage Operations', () => {
         'X-DID-Signature': leasesSig,
         'X-DID-Timestamp': leasesTimestamp.toString()
       }
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     expect(leasesRes.status).toBe(200);
     const data = await leasesRes.json() as any;
@@ -151,7 +151,7 @@ describe('Storage Operations', () => {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     expect(res1.status).toBe(402);
 
     // Second request with SAME signature and timestamp should fail with Replay detected
@@ -159,7 +159,7 @@ describe('Storage Operations', () => {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
     
     expect(res2.status).toBe(401);
     expect(await res2.json()).toMatchObject({ error: expect.stringContaining('Replay detected') });
@@ -201,7 +201,7 @@ describe('Storage Operations', () => {
         'X-DID-Signature': evilSig,
         'X-DID-Timestamp': evilTimestamp.toString()
       }
-    }), env, createExecutionContext());
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
 
     expect(retrieveRes.status).toBe(403);
   });

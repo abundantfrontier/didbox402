@@ -10,9 +10,17 @@ BASE_RATE_PER_MB_HOUR = "100"
 INBOX_CREATION_FEE = "1000"
 
 # v0.7.0+ Node Identity (REQUIRED in non-dev environments)
-# The server will fail to operate correctly if these are missing when DEV_MODE != "true".
 # NODE_SIGNING_PRIVATE_KEY = "64 hex characters (32 bytes Ed25519 private key)"
 # NODE_DID = "did:key:z6Mk..."  # Must correspond to the private key above
+
+# Real Lightning (L402) via Alby
+# ALBY_API_KEY = "your_alby_api_key_here"
+
+# x402 (USDC) Configuration
+# USDC_RPC_URL = "https://mainnet.base.org"
+# USDC_WALLET_ADDRESS = "0xYourUSDCWallet"
+# USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"  # Base USDC (optional)
+# SATS_PER_USD = "100000"   # How many satoshis = 1 USD (for x402 amount conversion)
 
 [[r2_buckets]]
 binding = "STORAGE_BUCKET"

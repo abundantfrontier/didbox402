@@ -154,6 +154,66 @@ async function storeData(ciphertext) {
 }</code></pre>
         </section>
 
+        <section id="migration">
+            <h2>9. Migrating Data Between Nodes (v0.7.0+)</h2>
+            <p>
+                didbox402 supports <strong>Sovereign Mobility</strong> — the ability for clients to move their data from one node to another in a verifiable way.
+            </p>
+
+            <h3>Core Concepts</h3>
+            <ul>
+                <li>A <strong>Migration Proof</strong> (signed <code>MigrationAuthorization</code>) is obtained from the source node.</li>
+                <li>The client is responsible for downloading the data and re-uploading it to the destination.</li>
+                <li>In Phase 1, the destination node does not yet act on the Migration Proof (this comes in later phases).</li>
+            </ul>
+
+            <h3>Basic Migration using the SDK</h3>
+            <pre><code>import { DidBoxClient } from '@didbox/sdk-core';
+import { signRequest } from '@didbox/sdk-crypto';
+
+const client = new DidBoxClient({
+  baseUrl: "https://source-node.didbox.com",
+  did: MY_DID,
+  signRequest: (ts, method, path, body) => signRequest(MY_KEY, method, path, body, ts)
+});
+
+// Option 1: Get a Migration Proof (recommended low-level approach)
+const { authorization, verified } = await client.getMigrationProof("storage-abc123");
+
+if (!verified) {
+  console.error("Failed to verify migration proof");
+  return;
+}
+
+console.log("Migration Proof obtained. Remaining lease:", authorization.remaining_lease_hours, "hours");
+
+// Option 2: Use the basic migrate() helper (convenience)
+const result = await client.migrate("storage-abc123", {
+  destinationUrl: "https://dest-node.didbox.com",
+  newDurationHours: 72
+});
+
+console.log("Migration complete. New storage ID:", result.newStorageId);</code></pre>
+
+            <h3>Using a Client for a Different Node</h3>
+            <p>
+                If you need to obtain a Migration Proof from a node you are not primarily connected to:
+            </p>
+            <pre><code>const sourceClient = DidBoxClient.forNode("https://old-node.didbox.com", {
+  did: MY_DID,
+  signRequest: mySignFunction
+});
+
+const proof = await sourceClient.getMigrationProof(storageId);</code></pre>
+
+            <h3>Important Notes (Phase 1)</h3>
+            <ul>
+                <li>The <code>migrate()</code> helper is intentionally basic. It does not yet present the Migration Proof to the destination node.</li>
+                <li>You are responsible for paying any egress fees on the source node.</li>
+                <li>Both source and destination nodes must be running v0.7.0+ for full functionality.</li>
+            </ul>
+        </section>
+
         <section id="common-errors">
             <h2>Common Errors & How to Fix Them</h2>
             <table class="error-table">

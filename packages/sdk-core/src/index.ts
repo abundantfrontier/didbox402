@@ -1,4 +1,5 @@
 import { negotiatePayment } from '@didbox/sdk-payments';
+import { verifyMigrationAuthorization, type MigrationAuthorization } from '@didbox/sdk-crypto';
 
 export interface DidBoxClientConfig {
   baseUrl: string;
@@ -32,8 +33,64 @@ export class DidBoxPaymentRequiredError extends DidBoxError {
   }
 }
 
+// === Migration-specific errors (v0.7.0+) ===
+
+export class DidBoxVerificationError extends DidBoxError {
+  constructor(message: string, public details?: any) {
+    super(400, message, details);
+    this.name = 'DidBoxVerificationError';
+  }
+}
+
+export class DidBoxMigrationError extends DidBoxError {
+  constructor(
+    public stage: 'proof' | 'retrieve' | 'store' | 'unknown',
+    message: string,
+    public details?: any
+  ) {
+    super(500, message, details);
+    this.name = 'DidBoxMigrationError';
+  }
+}
+
+// Re-export MigrationAuthorization type for convenience
+export type { MigrationAuthorization } from '@didbox/sdk-crypto';
+
+// Migration errors are already exported via `export class` above.
+
+export interface GetMigrationProofResult {
+  authorization: MigrationAuthorization;
+  verified: boolean;
+  verificationError?: string;
+}
+
+export interface MigrateOptions {
+  destinationUrl: string;
+  newDurationHours: number;
+  inboxAlias?: string;
+}
+
+export interface MigrateResult {
+  newStorageId: string;
+}
+
 export class DidBoxClient {
   constructor(private config: DidBoxClientConfig) {}
+
+  /**
+   * Create a new DidBoxClient configured for a specific node.
+   * Useful when you need to interact with a node other than your primary one
+   * (e.g., getting a Migration Proof from a source node).
+   */
+  static forNode(
+    nodeUrl: string,
+    config: Omit<DidBoxClientConfig, 'baseUrl'>
+  ): DidBoxClient {
+    return new DidBoxClient({
+      ...config,
+      baseUrl: nodeUrl.replace(/\/$/, '') // remove trailing slash
+    });
+  }
 
   private async request(path: string, options: RequestInit = {}): Promise<Response> {
     const method = options.method || 'GET';
@@ -131,5 +188,161 @@ export class DidBoxClient {
     });
     if (!res.ok) throw new Error(`Extend failed: ${res.status} ${await res.text()}`);
     return res.json();
+  }
+
+  /**
+   * Requests a Migration Proof (signed MigrationAuthorization) from this node.
+   * This is the main entry point for Phase 1 of Sovereign Mobility.
+   */
+  async getMigrationProof(
+    storageId: string,
+    options: { verifySignature?: boolean } = {}
+  ): Promise<GetMigrationProofResult> {
+    const { verifySignature = true } = options;
+
+    const res = await this.request(`/migrate/${storageId}/authorize`, {
+      method: 'POST'
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new DidBoxError(res.status, `Failed to get migration proof: ${text}`);
+    }
+
+    const authorization: MigrationAuthorization = await res.json();
+
+    if (!verifySignature) {
+      return { authorization, verified: false };
+    }
+
+    // Fetch the node's identity from its own discovery document
+    try {
+      const discoveryRes = await fetch(`${this.config.baseUrl}/.well-known/didbox-configuration`);
+      if (!discoveryRes.ok) {
+        return {
+          authorization,
+          verified: false,
+          verificationError: 'Failed to fetch node identity from source node'
+        };
+      }
+
+      const discovery = await discoveryRes.json();
+      const nodeIdentity = discovery.node_identity;
+
+      if (!nodeIdentity?.did) {
+        return {
+          authorization,
+          verified: false,
+          verificationError: 'Source node does not publish a node_identity'
+        };
+      }
+
+      // Extract public key from the did:key
+      const { extractPublicKeyFromDid } = await import('@didbox/sdk-crypto');
+      const nodePublicKey = extractPublicKeyFromDid(nodeIdentity.did);
+
+      const verified = await verifyMigrationAuthorization(authorization, nodePublicKey);
+
+      return {
+        authorization,
+        verified,
+        verificationError: verified ? undefined : 'Signature verification failed'
+      };
+    } catch (err) {
+      if (err instanceof DidBoxVerificationError) throw err;
+
+      return {
+        authorization,
+        verified: false,
+        verificationError: err instanceof Error ? err.message : 'Unknown verification error'
+      };
+    }
+  }
+
+  /**
+   * Basic high-level migration helper (Phase 1).
+   *
+   * This is a convenience method that:
+   *   1. Gets a Migration Proof from the current (source) node
+   *   2. Retrieves the ciphertext
+   *   3. Stores it on the destination node
+   *
+   * Note: In Phase 1, this does *not* present the Migration Proof to the
+   * destination node. That capability is planned for a future phase.
+   */
+  async migrate(
+    sourceStorageId: string,
+    options: MigrateOptions
+  ): Promise<MigrateResult> {
+    const { destinationUrl, newDurationHours, inboxAlias = 'default' } = options;
+
+    // Create a client for the destination node using the same identity
+    const destinationClient = DidBoxClient.forNode(destinationUrl, {
+      did: this.config.did,
+      signRequest: this.config.signRequest,
+      autoPay: this.config.autoPay,
+    });
+
+    try {
+      // Step 1: Get Migration Proof from source (this client)
+      const proofResult = await this.getMigrationProof(sourceStorageId);
+
+      if (!proofResult.verified) {
+        throw new DidBoxMigrationError(
+          'proof',
+          `Failed to obtain verified Migration Proof: ${proofResult.verificationError || 'Unknown error'}`,
+          { verificationError: proofResult.verificationError }
+        );
+      }
+
+      // Step 2: Retrieve the ciphertext from source
+      const retrieveRes = await this.request(`/retrieve/${sourceStorageId}`, {
+        headers: { 'X-Inbox-Alias': inboxAlias }
+      });
+
+      if (!retrieveRes.ok) {
+        const text = await retrieveRes.text();
+        throw new DidBoxMigrationError(
+          'retrieve',
+          `Failed to retrieve data from source: ${text}`,
+          { status: retrieveRes.status, body: text }
+        );
+      }
+
+      const { ciphertext } = await retrieveRes.json();
+
+      // Step 3: Store on destination
+      const storeRes = await destinationClient.request('/store', {
+        method: 'POST',
+        body: JSON.stringify({
+          ciphertext,
+          durationHours: newDurationHours,
+          recipientDid: this.config.did,
+          inboxAlias
+        })
+      });
+
+      if (!storeRes.ok) {
+        const text = await storeRes.text();
+        throw new DidBoxMigrationError(
+          'store',
+          `Failed to store data on destination: ${text}`,
+          { status: storeRes.status, body: text }
+        );
+      }
+
+      const { storageId: newStorageId } = await storeRes.json();
+
+      return { newStorageId };
+    } catch (err) {
+      if (err instanceof DidBoxMigrationError || err instanceof DidBoxVerificationError) {
+        throw err;
+      }
+      throw new DidBoxMigrationError(
+        'unknown',
+        `Migration failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        { originalError: err }
+      );
+    }
   }
 }
