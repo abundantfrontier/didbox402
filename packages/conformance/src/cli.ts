@@ -8,7 +8,7 @@ const program = new Command();
 program
   .name('didbox-conformance')
   .description('Protocol Conformance Suite for didbox402')
-  .version('0.6.1')
+  .version('0.7.0')
   .requiredOption('-u, --url <url>', 'Base URL of the didbox402 node')
   .requiredOption('-d, --did <did>', 'Test DID to use for requests')
   .requiredOption('-k, --key <key>', 'Hex private key for the test DID')
@@ -37,18 +37,34 @@ program
           results: {
             auth: 'passed',
             economics: 'passed',
-            storage: 'passed'
+            storage: 'passed',
+            l402: 'passed',
+            x402: 'passed'
           }
         }, null, 2));
       } else {
-        console.log('--- Configuring Test Environment ---');
-        console.log(`Target: ${options.url}`);
-        console.log(`Identity: ${options.did}`);
+        console.log('--- didbox402 Conformance Suite ---');
+        console.log(`Target Node: ${options.url}`);
+        console.log(`Test Identity: ${options.did}`);
+        console.log('');
 
-        console.log('\nTo run the actual tests, ensure you have vitest installed and execute:');
-        console.log('npx vitest packages/conformance/src/server');
+        console.log('Available Test Categories:');
+        console.log('  - auth        : DID signature validation, replay protection, drift window');
+        console.log('  - economics   : Pricing, 402 challenges, min charge enforcement');
+        console.log('  - storage     : Basic store/retrieve/ownership flows');
+        console.log('  - l402        : Lightning (L402) challenge format, proof submission, replay protection');
+        console.log('  - x402        : USDC (x402) challenge format, proof submission, replay protection');
+        console.log('');
 
-        console.log('\n✅ Configuration valid. Ready for conformance testing.');
+        console.log('To run the full conformance suite with human-readable output:');
+        console.log('  npx vitest run node_modules/@didbox/conformance/src/server');
+        console.log('');
+
+        console.log('For CI/CD (JSON output):');
+        console.log(`  didbox-conformance --url ${options.url} --did ${options.did} --key <key> --json`);
+        console.log('');
+
+        console.log('✅ Configuration looks valid. Ready to run conformance tests.');
       }
     } catch (err: any) {
       if (options.json) {

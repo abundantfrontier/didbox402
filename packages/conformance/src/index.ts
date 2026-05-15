@@ -1,6 +1,8 @@
 import { runAuthConformanceTests } from './server/auth.test';
 import { runEconomicsConformanceTests } from './server/economics.test';
 import { runStorageConformanceTests } from './server/storage.test';
+import './server/l402.test';
+import './server/x402.test';
 
 export interface ConformanceConfig {
   baseUrl: string;
