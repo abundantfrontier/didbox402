@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.6.2) | Verification & Conformance</title>
+    <title>didbox402 (v0.7.0) | Verification & Conformance</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -32,8 +32,8 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Back to Index</a>
-        <h1>The Proof: Verification & Conformance <span style="font-size: 0.5em; opacity: 0.7;">v0.6.2</span></h1>
-        <p>A protocol is only as good as its verification. Version v0.6.2 introduces the <strong>Testing Gauntlet</strong>: a suite of 21 automated tests verifying security, privacy, and dual-rail economic compliance.</p>
+        <h1>The Proof: Verification & Conformance <span style="font-size: 0.5em; opacity: 0.7;">v0.7.0</span></h1>
+        <p>A protocol is only as good as its verification. v0.7.0 significantly expands the <strong>Conformance Suite</strong>, with strong coverage for real L402 (Lightning) and x402 (USDC) payment rails, including proof submission and replay protection.</p>
 
         <h2>Mandatory Core Tests</h2>
 
@@ -80,13 +80,17 @@
         </div>
 
         <h2>Reference Conformance Suite</h2>
-        <p>The <code>didbox402</code> repository includes <strong>21 automated tests</strong> across four modular files:</p>
+        <p>The official <code>@didbox/conformance</code> package provides the authoritative test suite. As of v0.7.0, it includes dedicated tests for real payment rails:</p>
         <ul>
-            <li><code>auth.test.ts</code>: Headers, Multibase parsing, Drift windows, and Janitor security.</li>
-            <li><code>storage.test.ts</code>: Store/Retrieve flow, Nonce tracking, and Privacy invariants.</li>
-            <li><code>inboxes.test.ts</code>: Alias creation, listing, and isolation.</li>
-            <li><code>index.test.ts</code>: Economic handshake and 402 challenge cycles.</li>
+            <li><code>auth.test.ts</code> — DID authentication, replay protection, drift window</li>
+            <li><code>economics.test.ts</code> — Pricing, 402 challenges, min charge</li>
+            <li><code>storage.test.ts</code> — Store/retrieve/ownership flows</li>
+            <li><code>inboxes.test.ts</code> — Inbox creation and isolation</li>
+            <li><code>l402.test.ts</code> — Lightning (L402) challenge format, proof submission, replay protection</li>
+            <li><code>x402.test.ts</code> — USDC (x402) challenge format, proof submission, replay protection</li>
         </ul>
+        <p>Run the full suite with:</p>
+        <pre><code>npx @didbox/conformance --url https://your-node.com --did did:key:... --key &lt;hex&gt;</code></pre>
         
         <div class="assertion">
             # Run the complete testing gauntlet<br>

@@ -43,6 +43,9 @@ export {
   type MigrationAuthorization,
 } from './migration';
 
+// Re-export Node Identity helpers defined in this file
+export { publicKeyToDidKey, publicKeyToMultibase };
+
 /**
  * Extract the Ed25519 public key from a standard did:key string.
  */
@@ -60,4 +63,40 @@ export function extractPublicKeyFromDid(did: string): Uint8Array {
   }
   
   return decoded.slice(2);
+}
+
+/**
+ * Convert a raw 32-byte Ed25519 public key into a did:key string (z6Mk...).
+ * Used by nodes to publish their node_identity.public_key in a standard format.
+ */
+export function publicKeyToDidKey(publicKey: Uint8Array): string {
+  if (publicKey.length !== 32) {
+    throw new Error('Ed25519 public key must be exactly 32 bytes');
+  }
+  
+  // Ed25519 multicodec prefix: 0xed 0x01
+  const prefix = new Uint8Array([0xed, 0x01]);
+  const combined = new Uint8Array(prefix.length + publicKey.length);
+  combined.set(prefix);
+  combined.set(publicKey, prefix.length);
+  
+  const multibase = bs58.encode(combined);
+  return `did:key:z${multibase}`;
+}
+
+/**
+ * Convert a raw 32-byte Ed25519 public key to its base58btc multibase representation
+ * (without the 'did:key:' prefix). This is the value recommended for `node_identity.public_key`.
+ */
+export function publicKeyToMultibase(publicKey: Uint8Array): string {
+  if (publicKey.length !== 32) {
+    throw new Error('Ed25519 public key must be exactly 32 bytes');
+  }
+  
+  const prefix = new Uint8Array([0xed, 0x01]);
+  const combined = new Uint8Array(prefix.length + publicKey.length);
+  combined.set(prefix);
+  combined.set(publicKey, prefix.length);
+  
+  return bs58.encode(combined);
 }

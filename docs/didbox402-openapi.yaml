@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: didbox402 Protocol API
-  version: 0.6.2
+  version: 0.7.0
   description: |
     Agent-native open protocol for ephemeral, paid, and verifiable storage.
     All requests (except discovery) MUST be authenticated using DID signatures with temporal binding.
@@ -83,6 +83,33 @@ components:
               default: 1
         endpoints:
           type: object
+          properties:
+            store:
+              type: string
+            retrieve:
+              type: string
+            extend:
+              type: string
+            inbox:
+              type: string
+            inboxes:
+              type: string
+            leases:
+              type: string
+            price:
+              type: string
+            migrate_authorize:
+              type: string
+              description: "POST /migrate/{id}/authorize (v0.7.0+ Sovereign Mobility)"
+          example:
+            store: "/store"
+            retrieve: "/retrieve/{id}"
+            extend: "/extend/{id}"
+            inbox: "/inbox/{alias}"
+            inboxes: "/inboxes"
+            leases: "/leases"
+            price: "/price"
+            migrate_authorize: "/migrate/{id}/authorize"
         node_identity:
           type: object
           required: [did, public_key]

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.6.2) | Documentation Index</title>
+    <title>didbox402 (v0.7.0) | Documentation Index</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -29,7 +29,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>didbox402 <span style="font-size: 0.5em; opacity: 0.7;">v0.6.2</span></h1>
+        <h1>didbox402 <span style="font-size: 0.5em; opacity: 0.7;">v0.7.0</span></h1>
         <p class="tagline">An Agent-First Protocol for Ephemeral, Paid, and Verifiable Storage.</p>
 
         <nav>
@@ -83,6 +83,10 @@
                     <p>How to add custom payment rails, storage backends, and auth logic.</p>
                 </li>
                 <li>
+                    <a href="designs/">Design Documents (v0.7.0)</a>
+                    <p>Sovereign Mobility, Client SDK design, and implementation plans.</p>
+                </li>
+                <li>
                     <a href="../FUTURE.md">The Horizon: Future Directions</a>
                     <p>Strategic questions and potential roadmap for Sovereign Mobility and Federation.</p>
                 </li>
@@ -97,7 +101,7 @@
             <strong>The Human "Boil-Up":</strong>
             didbox402 isn't just a database. It's a <strong>vending machine for privacy</strong>. Agents pay for exactly what they use, for exactly how long they need it, and they prove who they are with DIDs.
             <br><br>
-            <strong>The Mainnet Bridge:</strong> v0.6.2 implements <strong>Real L402 + x402 Settlement</strong>, providing interoperability between Lightning and Web3/Base rails.
+            <strong>The Mainnet Bridge:</strong> v0.6.2 implemented real L402 + x402 settlement. <strong>v0.7.0</strong> adds <strong>Sovereign Mobility</strong> (client-driven migration with verifiable Migration Proofs) and significantly expands the Conformance Suite for real payment rails.
             <br><br>
             <strong>Next:</strong> v0.7.0 design for <strong>Sovereign Mobility (Phase 1)</strong> now available.
         </div>
@@ -110,7 +114,7 @@
             <h2>Developer Resources</h2>
             <p>Ready to build? Use the following resources to integrate with the protocol:</p>
             <ul>
-                <li><strong><a href="protocol-spec.html">Formal Protocol Specification (v0.6.2)</a></strong></li>
+                <li><strong><a href="protocol-spec.html">Formal Protocol Specification (v0.7.0)</a></strong></li>
                 <li><strong><a href="implementer-guide.html">Implementer's Guide</a></strong></li>
                 <li><code>packages/conformance</code>: Standalone Protocol Conformance Suite.</li>
                 <li><code>packages/server/src/index.ts</code>: Hono Edge Server (Reference).</li>

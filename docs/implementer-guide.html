@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.6.2) | Implementer's Guide</title>
+    <title>didbox402 (v0.7.0) | Implementer's Guide</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -27,8 +27,8 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.6.2</span></h1>
-        <p><strong>New in v0.6.2:</strong> Official OpenAPI 3.1 spec available at <code>docs/didbox402-openapi.yaml</code>.</p>
+        <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.7.0</span></h1>
+        <p><strong>New in v0.6.2:</strong> Official OpenAPI 3.1 spec available at <code>docs/didbox402-openapi.yaml</code>. (v0.7.0 adds Migration Proof + Node Identity support.)</p>
         <p><strong>Design for v0.7.0 – Sovereign Mobility (Phase 1):</strong><br>
            <a href="designs/v070-sovereign-mobility-phase1.md">Minimal Migration Design Document</a> (reviewed & revised after panel review)</p>
 
@@ -212,6 +212,76 @@ const proof = await sourceClient.getMigrationProof(storageId);</code></pre>
                 <li>You are responsible for paying any egress fees on the source node.</li>
                 <li>Both source and destination nodes must be running v0.7.0+ for full functionality.</li>
             </ul>
+        </section>
+
+        <section id="server-migration">
+            <h2>10. Server Implementation Requirements (v0.7.0+)</h2>
+            
+            <h3>Supporting Sovereign Mobility</h3>
+            <p>To be compliant with v0.7.0, your node <strong>MUST</strong> implement <code>POST /migrate/{id}/authorize</code>.</p>
+            
+            <h4>Core Requirements</h4>
+            <ul>
+                <li>Require valid DID authentication (the caller must be the owner of the storage object).</li>
+                <li>Return 404 for unknown storage IDs, 403 for non-owners, 410 for expired leases.</li>
+                <li>Compute <code>ciphertext_hash</code> (sha256:) of the current blob.</li>
+                <li>Calculate <code>remaining_lease_hours</code> as <code>max(1, ceil(remaining time in hours))</code>.</li>
+                <li>Sign the authorization using <strong>JCS canonicalization (RFC 8785)</strong> + your node's dedicated Ed25519 key.</li>
+                <li>Publish your node identity in <code>/.well-known/didbox-configuration</code> (see below).</li>
+            </ul>
+
+            <h3>Node Identity Configuration (Mandatory)</h3>
+            <p>Every production node in v0.7.0 <strong>MUST</strong> be configured with a dedicated Ed25519 keypair for signing Migration Authorizations.</p>
+            
+            <pre><code># wrangler.toml or environment
+NODE_DID="did:key:z6MkYourNodeIdentity..."
+NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
+
+            <p>The corresponding public key will be automatically derived and published in discovery.</p>
+
+            <h3>Important Environment Variables (v0.7.0)</h3>
+            <table class="error-table">
+                <tr>
+                    <th>Variable</th>
+                    <th>Required?</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>SERVICE_SALT</code></td>
+                    <td>Yes (prod)</td>
+                    <td>High-entropy secret for DID hashing (≥128 bits)</td>
+                </tr>
+                <tr>
+                    <td><code>NODE_DID</code></td>
+                    <td>Yes (v0.7.0+)</td>
+                    <td>Node's did:key identity (Ed25519)</td>
+                </tr>
+                <tr>
+                    <td><code>NODE_SIGNING_PRIVATE_KEY</code></td>
+                    <td>Yes (v0.7.0+)</td>
+                    <td>32-byte hex Ed25519 private key for Migration Proofs</td>
+                </tr>
+                <tr>
+                    <td><code>ALBY_API_KEY</code></td>
+                    <td>Optional</td>
+                    <td>Enables real L402 (Lightning) via Alby Hub</td>
+                </tr>
+                <tr>
+                    <td><code>USDC_RPC_URL</code></td>
+                    <td>Optional</td>
+                    <td>Enables real x402 (Base USDC) verification</td>
+                </tr>
+                <tr>
+                    <td><code>USDC_WALLET_ADDRESS</code></td>
+                    <td>Optional</td>
+                    <td>Your USDC receiving address for x402</td>
+                </tr>
+                <tr>
+                    <td><code>DEV_MODE</code></td>
+                    <td>Optional</td>
+                    <td>Set to "true" to bypass real payment verification and node identity (never in production)</td>
+                </tr>
+            </table>
         </section>
 
         <section id="common-errors">

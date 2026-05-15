@@ -5,7 +5,7 @@ describe('DidBoxClient', () => {
   const config = {
     baseUrl: 'http://test-node.local',
     did: 'did:key:z6Mktest',
-    // New 4-arg signature per v0.6.2 spec
+    // New 4-arg signature per v0.6.2 / v0.7.0 spec
     signRequest: vi.fn().mockResolvedValue('test_signature'),
     autoPay: true
   };

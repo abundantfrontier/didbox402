@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.6.2) | Privacy & Metadata</title>
+    <title>didbox402 (v0.7.0) | Privacy & Metadata</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -24,16 +24,18 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Shadow: Privacy & Metadata <span style="font-size: 0.5em; opacity: 0.7;">v0.6.2</span></h1>
+        <h1>The Shadow: Privacy & Metadata <span style="font-size: 0.5em; opacity: 0.7;">v0.7.0</span></h1>
 
         <p>Even if the payload is encrypted, <strong>metadata is a signal</strong>. Knowing who is talking to whom is often enough to compromise agent security.</p>
+
+        <p><strong>v0.7.0 Note:</strong> Migration Proofs (see design docs) intentionally contain the raw <code>owner_did</code> as an explicit exception to the normal "no raw DIDs" rule. This is required for verifiable cross-node migration.</p>
 
         <div class="privacy-box">
             <strong>The Problem:</strong> If we store <code>recipient_did</code> or <code>owner_did</code> as a string, any administrator can see the entire communication graph.
         </div>
 
         <h2>The Solution: Absolute Pseudonymity</h2>
-        <p>didbox402 v0.6.2 mandates that <strong>no raw DIDs</strong> are stored in lookup indexes. All identifiers (owners and recipients) are converted to salted hashes.</p>
+        <p>didbox402 mandates that <strong>no raw DIDs</strong> are stored in lookup indexes (since v0.6.2). All identifiers (owners and recipients) are converted to salted hashes.</p>
         
         <pre>Identity_Hash = SHA256(Recipient_DID + Alias + Service_Salt)</pre>
 
@@ -54,7 +56,7 @@
         </ul>
 
         <div style="background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 8px; margin-top: 20px; color: #1e7e34; font-weight: bold;">
-            v0.6.2 Update: The <code>inboxes</code> table has been refactored to use <code>owner_hash</code> instead of raw DIDs, closing the final metadata leakage vector.
+            v0.6.2 Update: The <code>inboxes</code> table was refactored to use <code>owner_hash</code> instead of raw DIDs.
         </div>
     </div>
 </body>

@@ -6,7 +6,7 @@ didbox402 is an agent-native open protocol for ephemeral, paid, and verifiable s
 
 ---
 
-## Status: v0.6.1 (Production-Ready Open Protocol)
+## Status: v0.7.0 (Sovereign Mobility + Real Rails)
 
 This repository serves as the definitive specification and reference ecosystem for the didbox402 standard.
 
@@ -28,12 +28,13 @@ Commercial providers build production services on top of this protocol, offering
 ## Repository Structure
 - **`PROTOCOL.md`**: The official technical specification.
 - **`ROADMAP.md`**: The public project roadmap.
-- **`packages/conformance`**: The official Protocol Conformance CLI.
+- **`packages/conformance`**: The official Protocol Conformance CLI (recommended for validation).
+- **`TESTING.md`**: Guidance on running tests and known limitations of the test harness.
 - **`packages/server`**: The Cloudflare Workers reference node.
 - **`packages/sdk-*`**: Reusable TypeScript modules for agents and clients.
 - **`docs/`**: Comprehensive implementer guides and architectural documentation.
 
-## Quick Start (v0.6.1)
+## Quick Start (v0.7.0)
 
 ### 1. Install Dependencies
 ```bash
@@ -54,6 +55,9 @@ cd packages/server && npx wrangler dev
 ## Documentation
 - **[Implementer's Guide](docs/implementer-guide.html)**: Building your own compliant node.
 - **[Formal Specification](PROTOCOL.md)**: The definitive rulebook.
+- **[Sovereign Mobility Design](docs/designs/v070-sovereign-mobility-phase1.md)**: Client-driven migration (v0.7.0).
+- **[Client SDK Migration Design](docs/designs/v070-client-sdk-migration.md)**: `getMigrationProof()` and `migrate()` design.
+- **[Migration Implementation Plan](docs/designs/v070-client-sdk-migration-implementation-plan.md)**: Detailed execution record.
 - **[Extension Points](docs/extensions.html)**: How to customize and commercialize.
 - **[Threat Model](docs/threat-model.html)**: Security considerations and mitigations.
 

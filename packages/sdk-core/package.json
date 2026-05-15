@@ -1,13 +1,13 @@
 {
   "name": "@didbox/sdk-core",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest run"
   },
   "dependencies": {
-    "@didbox/sdk-crypto": "^0.6.2",
-    "@didbox/sdk-payments": "^0.6.0",
+    "@didbox/sdk-crypto": "^0.7.0",
+    "@didbox/sdk-payments": "^0.7.0",
     "@noble/hashes": "^2.2.0",
     "hono": "^4.0.0"
   },

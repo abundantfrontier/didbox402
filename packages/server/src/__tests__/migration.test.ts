@@ -62,6 +62,7 @@ describe('v0.7.0 Sovereign Mobility - Migration Authorization', () => {
         expires_at INTEGER NOT NULL
       )
     `).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS used_payments (payment_id TEXT PRIMARY KEY, rail TEXT NOT NULL, amount INTEGER NOT NULL, used_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`).run();
   });
 
   async function createTestBox(durationHours = 24) {

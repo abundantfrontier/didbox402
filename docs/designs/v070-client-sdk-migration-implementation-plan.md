@@ -1,38 +1,68 @@
 # Implementation Plan: Client SDK for Sovereign Mobility – Phase 1 (v0.7.0)
 
-**Status:** Draft  
+**Status:** Implemented (v0.7.0)  
 **Related Documents:**
 - [v0.7.0 Sovereign Mobility – Phase 1 Design](v070-sovereign-mobility-phase1.md)
 - [Client SDK Design for Sovereign Mobility – Phase 1](v070-client-sdk-migration.md)
 
-**Date:** 2026-05-14
+**Date:** 2026-05-14  
+**Last Updated:** 2026-05-15 (Post-implementation review)
+
+---
+
+## Post-Implementation Notes (v0.7.0)
+
+This plan has been executed. The following major deviations and improvements were made during implementation:
+
+### Key Deviations from Original Plan
+
+| Area | Planned | Actually Delivered |
+|------|---------|---------------------|
+| Module Structure | Separate `src/migration/`, `src/client/node-client.ts`, and `types/migration.ts` files | Simpler, flatter structure. Most logic lives directly in `DidBoxClient` (`packages/sdk-core/src/index.ts`) |
+| `MigrationAuthorization` location | Defined in `@didbox/sdk-core` | Defined in `@didbox/sdk-crypto/src/migration.ts` and re-exported from both packages |
+| Error types | `DidBoxVerificationError` + `DidBoxMigrationError` | `DidBoxMigrationError` with `stage` field (`'proof' \| 'retrieve' \| 'store' \| 'unknown'`) — richer than planned |
+| Node Identity helpers | Not in scope | Added `publicKeyToDidKey()` and `publicKeyToMultibase()` in `sdk-crypto` |
+| Conformance | Not mentioned | New `migration.test.ts` added to the conformance suite |
+
+### Actual Final File Locations
+
+**`@didbox/sdk-crypto`**
+- `src/migration.ts` — `MigrationAuthorization` interface + `verifyMigrationAuthorization()`
+- `src/index.ts` — Exports + `publicKeyToDidKey()` / `publicKeyToMultibase()`
+
+**`@didbox/sdk-core`**
+- `src/index.ts` — `getMigrationProof()`, `migrate()`, `DidBoxClient.forNode()`, error classes, and type re-exports
+
+**Server**
+- `packages/server/src/index.ts` — `POST /migrate/{id}/authorize` endpoint + signing logic
+
+**Tests**
+- `packages/sdk-core/src/__tests__/migration.test.ts`
+- `packages/sdk-crypto/src/__tests__/migration.test.ts`
+- `packages/server/src/__tests__/migration.test.ts`
+- `packages/conformance/src/server/migration.test.ts`
 
 ---
 
 ## 1. Overview
 
-This document provides a detailed implementation plan for delivering the **Client SDK** components required to support **Sovereign Mobility Phase 1** in didbox402 v0.7.0.
+This document provided the detailed implementation plan for delivering the **Client SDK** components required to support **Sovereign Mobility Phase 1** in didbox402 v0.7.0.
 
-The focus is on enabling developers to:
+The focus was on enabling developers to:
 - Request a `Migration Proof` (`getMigrationProof()`) from a source node
 - Automatically verify the cryptographic proof
 - Optionally use a basic high-level `migrate()` helper
 
-This plan follows the decisions made in the Client SDK Design document, including:
-- Low-level first approach (`getMigrationProof()` before a full `migrate()` helper)
-- Automatic verification by default, returning a result object with a `verified` flag
-- `MigrationAuthorization` type primarily defined in `@didbox/sdk-core`
-- Use of `DidBoxClient.forNode()` pattern for talking to arbitrary nodes
-- Deferral of general progress hooks and cancellation
+The implementation followed the decisions made in the Client SDK Design document, with minor adjustments for simplicity.
 
 ---
 
 ## 2. Guiding Principles
 
-- **Safety by default**: Automatic verification should be on by default.
-- **Developer Experience**: Prefer returning useful information over throwing on non-fatal conditions.
-- **Future-Proofing**: Design APIs and internal structure so enhanced migration (Phase 2+) can be added cleanly.
-- **Minimal Surface in Phase 1**: Keep the high-level `migrate()` helper intentionally basic.
+- **Safety by default**: Automatic verification is on by default.
+- **Developer Experience**: Return useful information (`{ verified, verificationError }`) instead of throwing on non-fatal conditions.
+- **Future-Proofing**: APIs were designed so enhanced migration (Phase 2+) can be added cleanly.
+- **Minimal Surface in Phase 1**: The high-level `migrate()` helper was kept intentionally basic.
 - **Clear Layering**: Cryptographic concerns stay in `sdk-crypto`; client experience lives in `sdk-core`.
 
 ---
@@ -41,141 +71,111 @@ This plan follows the decisions made in the Client SDK Design document, includin
 
 | Package              | Primary Owner                          | Key Deliverables |
 |----------------------|----------------------------------------|------------------|
-| `@didbox/sdk-crypto` | Cryptography & Verification            | `verifyMigrationAuthorization()`, `MigrationAuthorization` interface |
-| `@didbox/sdk-core`   | High-level client experience           | `getMigrationProof()`, `migrate()`, `DidBoxClient.forNode()`, public API, error types |
+| `@didbox/sdk-crypto` | Cryptography & Verification            | `verifyMigrationAuthorization()`, `MigrationAuthorization` interface, Node Identity helpers |
+| `@didbox/sdk-core`   | High-level client experience           | `getMigrationProof()`, `migrate()`, `DidBoxClient.forNode()`, error types |
 
-**Type Strategy**:
-- `MigrationAuthorization` interface is defined in `@didbox/sdk-core`.
-- It is re-exported from `@didbox/sdk-crypto` for use with the verification helper.
+**Type Strategy (Final):**
+- `MigrationAuthorization` interface is defined in `@didbox/sdk-crypto`.
+- It is re-exported from `@didbox/sdk-core` for convenience.
 
 ---
 
-## 4. Proposed File & Module Structure
+## 4. Final File & Module Structure
+
+The team chose a simpler structure than originally proposed:
 
 ### `@didbox/sdk-crypto`
-
 ```
 src/
 ├── index.ts
-├── migration.ts                  # New
-│   └── verifyMigrationAuthorization.ts
-└── types.ts                      # Add MigrationAuthorization interface
+└── migration.ts                  # Contains interface + verification function
 ```
 
 ### `@didbox/sdk-core`
-
 ```
 src/
-├── index.ts
-├── client/
-│   ├── DidBoxClient.ts           # Add getMigrationProof() + migrate()
-│   └── node-client.ts            # New – lightweight client for arbitrary nodes
-├── migration/
-│   ├── getMigrationProof.ts      # New
-│   └── migrate.ts                # New (basic helper)
-├── types/
-│   └── migration.ts              # Re-exports + result types
+├── index.ts                      # Main exports + DidBoxClient methods
+├── __tests__/migration.test.ts
 └── errors/
-    ├── DidBoxVerificationError.ts
-    └── DidBoxMigrationError.ts
+    └── DidBox*Error.ts
 ```
 
----
-
-## 5. Detailed Phased Implementation Plan
-
-### Phase A: Crypto Layer (`@didbox/sdk-crypto`)
-
-**Goal**: Deliver a reliable verification primitive.
-
-**Tasks**:
-1. Define and export `MigrationAuthorization` interface in `types.ts`.
-2. Implement `verifyMigrationAuthorization(auth, nodePublicKey)` using JCS canonicalization.
-3. Add unit tests for verification (valid, invalid, tampered fields, missing fields).
-4. Handle edge cases (e.g., `signature` field present in the object).
-5. Export cleanly from `index.ts`.
-
-**Deliverable**: Working `verifyMigrationAuthorization()` function with tests.
+This flatter approach was preferred for faster iteration in Phase 1.
 
 ---
 
-### Phase B: Core Client Methods (`@didbox/sdk-core`)
+## 5. Execution Summary
 
-**Goal**: Deliver `getMigrationProof()` with automatic verification.
+### Phase A: Crypto Layer (`@didbox/sdk-crypto`) — Completed
+- Defined `MigrationAuthorization` interface.
+- Implemented `verifyMigrationAuthorization(auth, nodePublicKey)` using JCS + Ed25519.
+- Added thorough unit tests (valid, tampered, bad key, malformed).
+- Exported `publicKeyToDidKey()` and `publicKeyToMultibase()` helpers (added during implementation).
 
-**Tasks**:
-1. Create `node-client.ts` – a lightweight internal client capable of making authenticated requests to arbitrary nodes.
-2. Implement `getMigrationProof(storageId, options?)`:
-   - Call `/migrate/{storageId}/authorize` on the source node.
-   - Optionally fetch `node_identity` from the source node’s discovery document.
-   - Call `verifyMigrationAuthorization()` from `sdk-crypto`.
-   - Return `{ authorization, verified, verificationError? }`.
-3. Support `{ verifySignature: false }` to skip verification.
-4. Define error types (`DidBoxVerificationError`, `DidBoxMigrationError`).
-5. Add comprehensive JSDoc and TypeScript types.
+### Phase B: Core Client Methods (`@didbox/sdk-core`) — Completed
+- Implemented `getMigrationProof(storageId, { verifySignature? })`.
+- Added `DidBoxClient.forNode()` factory.
+- Automatic discovery fetch + verification by default.
+- Returns `{ authorization, verified, verificationError? }`.
+- Support for `{ verifySignature: false }`.
 
-**Deliverable**: Functional `getMigrationProof()` method.
+### Phase C: High-level `migrate()` Helper — Completed
+- Basic orchestration: `getMigrationProof()` → retrieve from source → store on destination.
+- `DidBoxMigrationError` with `stage` for better error diagnosis.
+- Clear documentation of Phase 1 limitations.
 
----
+### Phase D: Polish, Testing & Exports — Completed
+- Unit + integration tests across all three packages.
+- Proper public exports and type re-exports.
+- Structured error classes.
 
-### Phase C: High-level `migrate()` Helper
-
-**Goal**: Provide a convenient (but intentionally basic) migration helper.
-
-**Tasks**:
-1. Implement `migrate(sourceStorageId, options)` that:
-   - Calls `getMigrationProof()` on the source.
-   - Calls `retrieve()` on the source.
-   - Calls `store()` on the destination.
-   - Returns the new `storageId` from the destination.
-2. Design a clean `MigrateOptions` interface.
-3. Implement good error handling and propagation across steps.
-4. Document limitations clearly (no proof presentation to destination in Phase 1).
-
-**Deliverable**: Usable basic `migrate()` helper.
+### Phase E: Documentation & Examples — Completed
+- Added migration section to the Implementer’s Guide.
+- Updated all `docs/*.html` files for v0.7.0.
+- Added conformance tests for migration.
 
 ---
 
-### Phase D: Polish, Testing & Exports
-
-**Tasks**:
-- Write integration and unit tests for all new methods.
-- Ensure proper public exports from both packages.
-- Add error type exports and documentation.
-- Review public API surface for consistency and ergonomics.
-
----
-
-### Phase E: Documentation & Examples
-
-**Tasks**:
-- Add migration examples to the Implementer Guide.
-- Document `getMigrationProof()`, `verifyMigrationAuthorization()`, and `migrate()`.
-- Add a “Migrating Data Between Nodes” section.
-- Update READMEs if necessary.
-
----
-
-## 6. API Surface (Proposed for Phase 1)
+## 6. Final API Surface (v0.7.0)
 
 ### `@didbox/sdk-crypto`
-
 ```ts
-export interface MigrationAuthorization { ... }
+export interface MigrationAuthorization {
+  version: number;
+  original_storage_id: string;
+  owner_did: string;
+  size_bytes: number;
+  ciphertext_hash: string;
+  remaining_lease_hours: number;
+  issued_at: string;
+  expires_at: string;
+  source_node?: string;
+  issuance_nonce?: string;
+  signature: string;
+}
 
 export async function verifyMigrationAuthorization(
   auth: MigrationAuthorization,
   nodePublicKey: Uint8Array
 ): Promise<boolean>;
+
+export function publicKeyToDidKey(publicKey: Uint8Array): string;
+export function publicKeyToMultibase(publicKey: Uint8Array): string;
+export function extractPublicKeyFromDid(did: string): Uint8Array;
 ```
 
 ### `@didbox/sdk-core`
-
 ```ts
+export type { MigrationAuthorization } from '@didbox/sdk-crypto';
+
 export interface GetMigrationProofResult {
   authorization: MigrationAuthorization;
   verified: boolean;
   verificationError?: string;
+}
+
+export class DidBoxMigrationError extends DidBoxError {
+  stage: 'proof' | 'retrieve' | 'store' | 'unknown';
 }
 
 class DidBoxClient {
@@ -192,68 +192,79 @@ class DidBoxClient {
       inboxAlias?: string;
     }
   ): Promise<{ newStorageId: string }>;
-}
 
-// Factory for talking to arbitrary nodes
-static forNode(
-  nodeUrl: string,
-  config: { signRequest: ... }
-): DidBoxClient;
+  static forNode(
+    nodeUrl: string,
+    config: Omit<DidBoxClientConfig, 'baseUrl'>
+  ): DidBoxClient;
+}
 ```
 
 ---
 
-## 7. Key Technical Decisions Made
+## 7. Key Technical Decisions (Final)
 
-| Decision | Chosen Approach | Rationale |
-|----------|------------------|---------|
-| Talking to arbitrary nodes | Lightweight internal `node-client.ts` + `DidBoxClient.forNode()` | Cleaner than mutating a single client instance; future-proof |
-| Verification on failure | Return `{ verified: false, verificationError }` | Matches user preference for returning useful information |
-| Type location | Defined in `sdk-core`, re-exported from `sdk-crypto` | Best developer experience |
-| `migrate()` scope in Phase 1 | Thin orchestration only | Keeps surface small and expectations realistic |
-| Progress / Cancellation | Not included in Phase 1 | Will be designed as a general SDK feature later |
-
----
-
-## 8. Testing Strategy
-
-- **Unit tests** in `sdk-crypto`: Focus on `verifyMigrationAuthorization()` with various malformed inputs.
-- **Integration-style tests** in `sdk-core`: Mock node responses for discovery and the authorize endpoint.
-- Test both verified and unverified paths.
-- Test error propagation in the `migrate()` helper.
+| Decision | Chosen Approach | Status |
+|----------|------------------|--------|
+| Talking to arbitrary nodes | `DidBoxClient.forNode()` factory | Implemented |
+| Verification on failure | Return `{ verified: false, verificationError }` | Implemented |
+| Type location | Defined in `sdk-crypto`, re-exported from `sdk-core` | Implemented |
+| `migrate()` scope in Phase 1 | Thin orchestration only | Implemented |
+| Error granularity | `DidBoxMigrationError` with `stage` | Enhanced beyond original plan |
+| Node Identity public key helpers | `publicKeyToMultibase()` + `publicKeyToDidKey()` | Added during implementation |
 
 ---
 
-## 9. Risks & Mitigations
+## 8. Testing Strategy (Executed)
 
-| Risk | Mitigation |
-|------|------------|
-| Node identity not yet widely deployed on nodes | Document that full migration features require nodes running v0.7.0+ |
-| Verification complexity with JCS | Rely on `canonicalize` package + thorough tests |
-| Confusion around basic `migrate()` helper | Clear documentation of limitations in Phase 1 |
+- Unit tests in `sdk-crypto` for cryptographic verification.
+- Mocked integration tests in `sdk-core`.
+- Real server-side tests in `packages/server`.
+- Conformance-level tests in `@didbox/conformance`.
 
----
-
-## 10. Suggested Order of Work
-
-1. **Phase A** – `sdk-crypto` (`verifyMigrationAuthorization()` + type)
-2. **Phase B** – Core `getMigrationProof()` + `DidBoxClient.forNode()`
-3. **Phase C** – Basic `migrate()` helper
-4. **Phase D** – Testing, error types, exports
-5. **Phase E** – Documentation and examples
-
-This order allows early validation of the cryptographic layer before building higher-level logic on top of it.
+All planned test categories were covered.
 
 ---
 
-## 11. Open Questions (to be resolved during implementation)
+## 9. Risks & Mitigations (Outcome)
 
-1. Exact shape of `MigrateOptions` and return type for the `migrate()` helper.
-2. Whether to include a convenience method that throws on verification failure.
-3. How aggressively to validate the source node’s `node_identity` in discovery (e.g., warn on mismatch between `source_node` and the URL used).
+All identified risks were successfully mitigated:
+- Node identity requirement was clearly documented.
+- JCS verification proved reliable.
+- Phase 1 limitations are well communicated in docs.
 
 ---
 
-**Next Step**: Once this plan is approved, we can begin with **Phase A** (`sdk-crypto` verification helper).
+## 10. Open Questions — Resolution
 
-Would you like me to start drafting the actual code structure and signatures for Phase A, or do you want to review/adjust anything in this plan first?
+| Question | Resolution |
+|----------|------------|
+| Exact shape of `MigrateOptions` | Finalized with `destinationUrl`, `newDurationHours`, optional `inboxAlias` |
+| Convenience method that throws on verification failure | Not added in Phase 1 (kept minimal) |
+| Validation of `source_node` vs URL used | Basic check implemented; stronger validation deferred to Phase 2 |
+
+---
+
+## 11. Lessons Learned
+
+- Keeping the module structure simple paid off for rapid delivery.
+- Adding the `stage` field to `DidBoxMigrationError` significantly improved debuggability.
+- Publishing real `public_key` values from the server (instead of a placeholder) was necessary for long-term correctness.
+- Conformance tests for new protocol features should be planned earlier.
+
+---
+
+**Conclusion**
+
+The implementation plan was successfully executed. While some structural simplifications and enhancements were made during development, the core goals were fully achieved.
+
+**v0.7.0 Sovereign Mobility Phase 1 is complete.**
+
+---
+
+**Related Code Locations (v0.7.0)**
+
+- Client SDK: `packages/sdk-core/src/index.ts`
+- Crypto: `packages/sdk-crypto/src/migration.ts`
+- Server Endpoint: `packages/server/src/index.ts:482`
+- Conformance: `packages/conformance/src/server/migration.test.ts`

@@ -42,6 +42,7 @@ function deriveNodeIdentity(privateKeyHex: string) {
  */
 let nodeDid: string | null = null;
 let nodeSigningPrivateKey: Uint8Array | null = null;
+let nodePublicKey: Uint8Array | null = null;
 let nodeIdentityInitialized = false;
 
 function initializeNodeIdentity(env: any) {
@@ -68,6 +69,8 @@ function initializeNodeIdentity(env: any) {
       if (privKey.length === 32 && did.startsWith('did:key:z6Mk')) {
         nodeDid = did;
         nodeSigningPrivateKey = privKey;
+        // Derive public key for proper node_identity publishing
+        nodePublicKey = ed.getPublicKey(privKey);
       }
     } catch (e) {
       // swallow errors in test/dev
@@ -88,18 +91,28 @@ function initializeNodeIdentity(env: any) {
 
   nodeDid = did;
   nodeSigningPrivateKey = privKey;
+  nodePublicKey = ed.getPublicKey(privKey);
   nodeIdentityInitialized = true;
 
   console.log('[NodeIdentity] Node identity initialized:', nodeDid);
 }
 
 function getNodeIdentity() {
-  if (!nodeDid || !nodeSigningPrivateKey) {
+  if (!nodeDid || !nodeSigningPrivateKey || !nodePublicKey) {
     throw new Error('Node identity has not been initialized or is missing required configuration.');
   }
+
+  // Encode as base58btc multibase with Ed25519 prefix (same as did:key:z...)
+  const prefix = new Uint8Array([0xed, 0x01]);
+  const combined = new Uint8Array(prefix.length + nodePublicKey.length);
+  combined.set(prefix);
+  combined.set(nodePublicKey, prefix.length);
+
+  const publicKeyMultibase = bs58.encode(combined);
+
   return {
     did: nodeDid,
-    public_key: 'derived-from-did' // verifiers should extract from the did:key
+    public_key: publicKeyMultibase
   };
 }
 
@@ -125,7 +138,7 @@ async function signMigrationAuthorization(auth: Record<string, any>): Promise<st
 function ensureNodeIdentity(c: any) {
   const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 
-  // In test mode, never enforce node identity
+  // In test / vitest mode, completely bypass node identity (most stable approach)
   if (isTest) {
     return null;
   }
@@ -149,10 +162,11 @@ app.use('*', async (c, next) => {
   const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
   if (isTest) {
     c.env.DEV_MODE = 'true';
-    // Completely disable node identity requirements in tests
+    // Completely disable node identity requirements in tests (v0.7.0 stabilization)
     nodeIdentityInitialized = true;
     nodeDid = 'did:key:z6Mktest';
-    nodeSigningPrivateKey = new Uint8Array(32); // dummy key
+    nodeSigningPrivateKey = new Uint8Array(32);
+    nodePublicKey = new Uint8Array(32);
   }
   return next();
 });
@@ -230,10 +244,11 @@ app.get('/.well-known/didbox-configuration', async (c) => {
   };
 
   if (nodeDid) {
-    response.node_identity = {
-      did: nodeDid,
-      public_key: 'derived-from-did'
-    };
+    try {
+      response.node_identity = getNodeIdentity();
+    } catch {
+      // If identity not fully ready, skip publishing (dev mode)
+    }
   }
 
   return c.json(response);
@@ -388,7 +403,7 @@ app.get('/retrieve/:id', async (c) => {
     const sizeMb = Math.max(1, Math.ceil((record.size_bytes || 0) / 1048576));
     const egressCost = sizeMb * egressRate;
     // For full implementation, this should go through the normal 402 + verifyAnyPayment flow.
-    // For v0.6.2 we document the capability; production nodes should implement proper 402 here.
+    // Egress charging is not yet part of the paid flow (see FUTURE.md). Production nodes should implement proper 402 + verifyAnyPayment here.
     console.log(`[egress] Would charge ${egressCost} sats for ${sizeMb}MB retrieval (rate=${egressRate})`);
   }
 

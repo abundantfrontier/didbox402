@@ -2,24 +2,26 @@
 
 This roadmap outlines the planned evolution of the **didbox402** protocol and reference implementation.
 
-## Current Milestone: v0.6.x (Open Protocol Release)
-**Status:** In Progress
-**Focus:** Adopton, Verifiability, and Professional Hardening.
+## Current Milestone: v0.7.0 (Sovereign Mobility + Real Rails)
+**Status:** Released
+**Focus:** Client-driven migration, Node Identity, real payment provider integration, and conformance expansion.
 
-- [x] Formal Protocol Specification (v0.6.0)
-- [x] Standalone Conformance Suite
-- [x] Implementer's Guide & Practical Examples
-- [x] v0.6.2 Security & Interoperability Hardening (replay protection, OpenAPI, SERVICE_SALT rules, discovery alignment)
-- [ ] Community & Contribution Infrastructure (v0.6.2+)
-- [ ] Final Documentation & Messaging Polish (v0.6.2)
+- [x] Sovereign Mobility Phase 1 (Migration Proofs + Node Identity + JCS signing)
+- [x] Real L402 (AlbyProvider) + Real x402 (BaseUSDCProvider + viem)
+- [x] Versioned L402 token + `used_payments` replay protection
+- [x] Expanded Conformance Suite (`l402.test.ts`, `x402.test.ts`, negative/adversarial cases)
+- [x] SDK migration helpers (`getMigrationProof`, `migrate`, `DidBoxClient.forNode`)
+- [x] All documentation updated to v0.7.0
 
-## Next Milestone: v0.7.0 (Sovereign Mobility + Production Polish)
+## Previous Milestone: v0.6.x (Security & Interoperability Hardening)
 **Goal:** Enable agents to migrate effortlessly between nodes and providers while preserving cryptographic sovereignty.
 
 ### Phase 1 (Minimal Migration) – Design Document
 A detailed design for the first phase of Sovereign Mobility has been developed:
 
-→ **[v0.7.0 Sovereign Mobility – Phase 1 Design](docs/designs/v070-sovereign-mobility-phase1.md)**
+→ **[v0.7.0 Sovereign Mobility – Phase 1 Design](docs/designs/v070-sovereign-mobility-phase1.md)**  
+ **[Client SDK Design & Implementation Plan](docs/designs/v070-client-sdk-migration-implementation-plan.md)**  
+ **[Client SDK Migration Design](docs/designs/v070-client-sdk-migration.md)**
 
 This phase introduces a client-orchestrated migration flow using a signed **Migration Authorization** issued by the source node. Key characteristics:
 - Client-mediated data movement (pull from source + push to destination)

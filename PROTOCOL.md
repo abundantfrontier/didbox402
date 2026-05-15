@@ -1,4 +1,4 @@
-# didbox402 Protocol Specification (v0.6.2)
+# didbox402 Protocol Specification (v0.7.0)
 
 **didbox402** is an agent-native open protocol for ephemeral, paid, and verifiable storage. It facilitates trustless data handoff between autonomous entities using Decentralized Identifiers (DIDs) and micropayments.
 
@@ -268,6 +268,80 @@ Lists all named inboxes provisioned by the authenticated DID (no payment require
 **Note on Administrative Endpoints:**
 The reference implementation exposes `GET /janitor/purge` (protected by `X-Admin-Token` or `DEV_MODE`). This endpoint is **not** part of the public protocol and implementers may implement automatic purge via cron, Durable Object alarms, or other background mechanisms instead.
 
+### 5.5 Migration Authorization (Sovereign Mobility Phase 1)
+
+Starting in v0.7.0, nodes **MUST** implement the `POST /migrate/{id}/authorize` endpoint to support client-orchestrated data migration between nodes.
+
+This endpoint allows an authenticated owner to obtain a signed **Migration Authorization** (also called a Migration Proof) that proves:
+- They are the owner of a specific storage object
+- The current size and ciphertext hash of the object
+- How many hours of lease time remain
+
+The client is responsible for retrieving the ciphertext from the source node and re-storing it on a destination node. In Phase 1, destination nodes **do not** inspect or require the Migration Authorization.
+
+#### Request
+
+```
+POST /migrate/{storage_id}/authorize
+Authorization: (via X-DID + X-DID-Signature headers)
+```
+
+The caller **MUST** be the owner of the storage object (verified via salted identity hash).
+
+#### Response (200 OK)
+
+Returns a `MigrationAuthorization` object:
+
+```json
+{
+  "version": 1,
+  "original_storage_id": "abc123...",
+  "owner_did": "did:key:z6Mk...",
+  "size_bytes": 1048576,
+  "ciphertext_hash": "sha256:abcdef...",
+  "remaining_lease_hours": 47,
+  "issued_at": "2026-05-15T12:00:00.000Z",
+  "expires_at": "2026-05-17T12:00:00.000Z",
+  "source_node": "https://node.example.com",
+  "issuance_nonce": "uuid-string",
+  "signature": "hex-encoded-ed25519-signature"
+}
+```
+
+**Field Definitions:**
+
+| Field                    | Type   | Required | Description |
+|--------------------------|--------|----------|-------------|
+| `version`                | number | Yes      | Migration Authorization format version (currently 1) |
+| `original_storage_id`    | string | Yes      | The storage ID on the source node |
+| `owner_did`              | string | Yes      | The DID of the owner (raw, as this is a transferable proof) |
+| `size_bytes`             | number | Yes      | Exact size of the ciphertext blob |
+| `ciphertext_hash`        | string | Yes      | `sha256:` prefixed hex hash of the ciphertext |
+| `remaining_lease_hours`  | number | Yes      | Ceiling of remaining lease time (minimum 1) |
+| `issued_at`              | string | Yes      | ISO8601 timestamp when the proof was issued |
+| `expires_at`             | string | Yes      | ISO8601 timestamp when the proof itself expires (≤ original lease expiry, max 48h) |
+| `source_node`            | string | Yes      | Origin URL of the issuing node |
+| `issuance_nonce`         | string | Yes      | Unique nonce for this authorization |
+| `signature`              | string | Yes      | Hex Ed25519 signature over the JCS-canonicalized object (without `signature` field) |
+
+**Signing Requirements (Normative):**
+- The node **MUST** sign using its dedicated Ed25519 key published in `node_identity`.
+- The object to be signed is the `MigrationAuthorization` **without** the `signature` field.
+- Canonicalization **MUST** use JSON Canonicalization Scheme (JCS / RFC 8785).
+- The canonical JSON is then SHA-256 hashed; the hash is signed with Ed25519.
+- The resulting signature is hex-encoded.
+
+**Server Rules:**
+- The endpoint **MUST** require valid DID authentication.
+- The server **MUST** verify that the authenticated DID owns the storage object.
+- The server **MUST** reject requests for expired leases (return 410).
+- `remaining_lease_hours` **MUST** be calculated as `max(1, ceil(remaining_ms / (1000*60*60)))`.
+- The proof's `expires_at` **SHOULD NOT** exceed the original lease expiry or 48 hours from issuance.
+- The `ciphertext_hash` **MUST** be computed from the current stored blob (on-the-fly is acceptable in Phase 1).
+
+**Client Usage:**
+Clients use this proof for verifiable migration via `getMigrationProof()` and `migrate()` in the official SDKs. The proof is third-party verifiable by any party that knows the node's `node_identity.did`.
+
 ---
 
 ## 6. Metadata Privacy & Scoping
@@ -307,7 +381,8 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
     "inbox": "/inbox/{alias}",
     "inboxes": "/inboxes",
     "leases": "/leases",
-    "price": "/price"
+    "price": "/price",
+    "migrate_authorize": "/migrate/{id}/authorize"
   },
   "node_identity": {
     "did": "did:key:z6Mk...",
@@ -407,24 +482,22 @@ Implementations **MUST** align with the threat model documented in `docs/threat-
 
 ---
 
-## 11. Future Work (v0.7.0+)
+## 11. Future Work
 
-The following areas are under active design for future versions of the protocol:
+The following areas are planned for future versions of the protocol:
 
-### 11.1 Sovereign Mobility (Migration)
+### 11.1 Sovereign Mobility Phase 2+
 
-A detailed design for the first phase of cross-node migration has been developed:
+Phase 1 (client-orchestrated migration with verifiable Migration Proofs) was completed in v0.7.0.
 
-→ **[v0.7.0 Sovereign Mobility – Phase 1 Design](docs/designs/v070-sovereign-mobility-phase1.md)**
+Future phases may include:
+- Destination nodes accepting and acting on Migration Authorizations (e.g., extending leases without full re-upload)
+- Cross-node lease transfer without client round-tripping the ciphertext
+- Reputation / capability signaling for high-quality destination nodes
 
-This phase introduces a client-orchestrated migration model using a signed **Migration Authorization** issued by the source node. Key properties of the Phase 1 design:
-- Data movement remains entirely client-side.
-- The Migration Authorization is generic and third-party verifiable.
-- Destination nodes are not required to recognize or specially handle migrations.
-- Strong emphasis on privacy and future extensibility (optional presentation of the authorization to the destination node in later phases).
-
-Implementation of the `/migrate/{id}/authorize` endpoint and the Migration Authorization format is planned for v0.7.0.
+The original Phase 1 design document remains available at:
+→ [docs/designs/v070-sovereign-mobility-phase1.md](/docs/designs/v070-sovereign-mobility-phase1.md)
 
 ---
-**Version:** 0.6.2  
+**Version:** 0.7.0  
 **Status:** Open Protocol Specification

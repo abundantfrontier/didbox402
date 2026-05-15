@@ -1,6 +1,8 @@
 # @didbox/conformance
 
-The official Protocol Conformance Suite for **didbox402**.
+The official Protocol Conformance Suite for **didbox402** (v0.7.0).
+
+> For information about test environment limitations and recommendations, see the root **[TESTING.md](../../TESTING.md)**.
 
 This package provides a standalone set of tests and a CLI that external implementers can run against their own servers to verify protocol compatibility.
 
@@ -36,7 +38,7 @@ export const config = {
   did: 'did:key:z6Mk...',
   // A function that signs using your test DID's private key
   signRequest: async (data: string) => { 
-    // Implementation of signature binding (v0.6.1)
+    // Implementation of signature binding (v0.7.0)
     // Hash = SHA256(Timestamp + Method + Path + BodyHash)
   }
 };
@@ -57,6 +59,7 @@ The conformance suite validates the following core areas:
 - **Replay Resistance**: Rejects used signatures (DID nonces) and used payment proofs (L402 preimages and x402 tx hashes).
 - **Privacy Invariant**: Raw DIDs are never stored in persistent indexes.
 - **L402 & x402 Payment Flows** (v0.7.0+): Proper challenge issuance and proof submission for both Lightning and USDC rails.
+- **Migration (Sovereign Mobility Phase 1)**: `node_identity` discovery, `/migrate/{id}/authorize` endpoint, and Migration Proof verification.
 
 ## Running with Real Payment Providers (L402 & x402)
 

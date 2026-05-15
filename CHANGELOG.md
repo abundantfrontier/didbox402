@@ -2,6 +2,36 @@
 
 All notable changes to the **didbox402** protocol and reference implementation will be documented in this file.
 
+## [0.7.0] - 2026-05-15
+
+### Sovereign Mobility (Phase 1)
+- **New `/migrate/{id}/authorize` endpoint**: Returns a signed `MigrationAuthorization` (Migration Proof) containing `owner_did`, `ciphertext_hash`, `remaining_lease_hours`, `source_node`, and Ed25519 signature.
+- **Node Identity (mandatory)**: Every node **MUST** publish `node_identity: { did, public_key }` in `/.well-known/didbox-configuration`. The `did:key` (Ed25519) is used to sign Migration Authorizations.
+- **JCS canonicalization** (RFC 8785 via `canonicalize` package) for deterministic signing of Migration Proofs.
+- **Client-orchestrated migration**: `getMigrationProof()` + `migrate()` helpers in `@didbox/sdk-core`. Client retrieves data and re-stores on destination node. No direct node-to-node coupling in Phase 1.
+- New error types: `DidBoxMigrationError` with `stage` (`proof` | `retrieve` | `store`).
+
+### Payments & Conformance Hardening
+- **Real L402 via AlbyProvider**: Full Lightning invoice creation + paid status verification through Alby Hub API. Structured `AlbyError` with codes (`AUTH_ERROR`, `RATE_LIMITED`, `NETWORK_ERROR`).
+- **Real x402 via BaseUSDCProvider**: `viem` + ERC20 `Transfer` log parsing on Base. 6-decimal USDC handling. Structured `USDCVerificationError`.
+- **Clean versioned L402 token** (hybrid approach): JSON token with `version`, `paymentHash`, `amount`, `currency: "sats"`, `singleUse: true`. Single-use enforced server-side via new `used_payments` table.
+- **Replay protection**: `used_payments` table + index. `verifyAnyPayment` now rejects reused proofs.
+- **Expanded Conformance Suite**: New `l402.test.ts` and `x402.test.ts` covering proof submission, negative cases (bad preimage, wrong amount, malformed, replay), structured error assertions, and smarter real-vs-DEV_MODE detection.
+- Conformance CLI now reports "Running with Real Payment Providers" when `ALBY_API_KEY` / `USDC_RPC_URL` are present.
+
+### SDK & Crypto
+- `@didbox/sdk-crypto`: New `migration.ts` with `MigrationAuthorization` interface + `verifyMigrationAuthorization()` (JCS + Ed25519).
+- `@didbox/sdk-core`: `DidBoxClient.forNode(url, config)` factory, `getMigrationProof(storageId, {verifySignature?})`, `migrate(...)`.
+- Signature binding standardized to 4-argument form (`ts + method + path + bodyHash`).
+
+### Documentation & Release
+- All `docs/*.html` pages updated to v0.7.0.
+- New design docs: `docs/designs/v070-sovereign-mobility-phase1.md`, `v070-client-sdk-migration.md`, and implementation plan.
+- Updated `PROTOCOL.md`, `ROADMAP.md`, threat model, privacy, use cases, and verification documentation for Node Identity and Migration Proofs.
+
+### Versioning
+- All packages (`@didbox/*`) and root bumped to **0.7.0**.
+
 ## [0.6.2] - 2026-05-14
 
 ### Protocol Specification (PROTOCOL.md) Changes
