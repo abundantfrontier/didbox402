@@ -21,11 +21,34 @@ export class BaseUSDCProvider implements Web3Provider {
       const receipt = await this.client.getTransactionReceipt({ hash: txHash as `0x${string}` });
       if (receipt.status !== 'success') return false;
 
-      // Extract Transfer events
-      const logs = receipt.logs;
-      // TODO: Filter and parse logs for USDC Transfer matching recipient and amount
-      // For v0.5.0 alpha, we return true if tx is successful.
-      return true;
+      // USDC Transfer event ABI
+      const transferEvent = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
+
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() !== this.usdcAddress.toLowerCase()) continue;
+
+        try {
+          const decoded = this.client.decodeEventLog({
+            abi: [transferEvent],
+            data: log.data,
+            topics: log.topics,
+          });
+
+          const to = (decoded.args as any).to as string;
+          const value = (decoded.args as any).value as bigint;
+
+          // amount is expected in USDC base units (6 decimals) when calling for x402
+          const expectedValue = BigInt(Math.floor(amount * 1_000_000));
+
+          if (to.toLowerCase() === recipient.toLowerCase() && value === expectedValue) {
+            return true;
+          }
+        } catch {
+          // not a Transfer event
+          continue;
+        }
+      }
+      return false;
     } catch (e) {
       return false;
     }

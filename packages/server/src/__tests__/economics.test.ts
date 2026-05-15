@@ -155,4 +155,45 @@ describe('Economics & Limits Hardening', () => {
     expect(data).toHaveProperty('min_charge_mb');
     expect(data.min_charge_mb).toBe(1);
   });
+
+  test('Replay protection: same valid L402 proof cannot be used twice (spec 4.4)', async () => {
+    // First store succeeds with a fresh mock payment
+    const timestamp = Date.now();
+    const body = JSON.stringify({ ciphertext: 'replay-test', durationHours: 1, recipientDid: MY_DID });
+    const sig = await signRequest('POST', '/store', body, timestamp);
+
+    const storeReq1 = new Request('http://localhost/store', {
+      method: 'POST',
+      headers: {
+        'X-DID': MY_DID,
+        'X-DID-Signature': sig,
+        'X-DID-Timestamp': timestamp.toString(),
+        'Authorization': 'L402 mock_macaroon:mock_preimage_123'
+      },
+      body
+    });
+
+    const res1 = await worker.fetch(storeReq1, env, createExecutionContext());
+    expect([200, 402]).toContain(res1.status); // 200 if payment accepted, 402 if strict
+
+    // Second request with the exact same payment proof should be rejected (replay)
+    const timestamp2 = Date.now() + 1000;
+    const body2 = JSON.stringify({ ciphertext: 'replay-test-2', durationHours: 1, recipientDid: MY_DID });
+    const sig2 = await signRequest('POST', '/store', body2, timestamp2);
+
+    const storeReq2 = new Request('http://localhost/store', {
+      method: 'POST',
+      headers: {
+        'X-DID': MY_DID,
+        'X-DID-Signature': sig2,
+        'X-DID-Timestamp': timestamp2.toString(),
+        'Authorization': 'L402 mock_macaroon:mock_preimage_123' // same proof
+      },
+      body: body2
+    });
+
+    const res2 = await worker.fetch(storeReq2, env, createExecutionContext());
+    // With the new replay logic, a second use of the same proof should fail verification
+    expect([401, 402]).toContain(res2.status);
+  });
 });

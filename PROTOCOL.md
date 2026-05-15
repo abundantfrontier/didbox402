@@ -331,6 +331,22 @@ didbox402 follows semantic versioning for the protocol.
 
 ---
 
+## 9. Client Requirements
+
+While most normative requirements are written for nodes, the following obligations apply to clients and SDKs:
+
+- **Signature Construction:** Clients MUST compute the request hash exactly as defined in 3.2 (double SHA-256 with `bodyHashHex`) and sign the resulting bytes with Ed25519. The official `@didbox/sdk-crypto` package provides the reference `signRequest` implementation.
+- **Freshness:** Every request MUST use a fresh `X-DID-Timestamp` (within the 5-minute window) and a unique signature. Clients SHOULD never reuse a signature.
+- **402 Handling:** On receiving 402, clients SHOULD parse both `WWW-Authenticate` (L402) and `PAYMENT-REQUIRED` (x402) and support at least one advertised rail. After successful payment, the client retries the original request with the appropriate proof header (`Authorization: L402 ...` or `PAYMENT-SIGNATURE`).
+- **Inbox Alias Usage (as recipient):** When retrieving or listing items sent to a non-default `inboxAlias`, the client MUST supply the `X-Inbox-Alias` header (or use the alias in the URL path). Owners retrieving their own items may omit the header.
+- **Clock Synchronization:** Clients SHOULD maintain NTP-synchronized clocks. On 401 drift errors, clients SHOULD read the `Date` response header and adjust future timestamps.
+- **Discovery:** Clients SHOULD fetch `/.well-known/didbox-configuration` without auth headers and tolerate additional fields.
+- **Ciphertext:** Clients MUST base64-encode the encrypted payload before sending in `POST /store`.
+
+Implementers using the high-level `DidBoxClient` from `@didbox/sdk-core` inherit most of these behaviors when a correct `signRequest` function is supplied.
+
+---
+
 ## 10. Conformance
 
 Implementations MUST pass the official **[didbox-conformance](packages/conformance)** suite (version matching the `protocol_version` advertised in discovery).
@@ -356,22 +372,6 @@ Implementations SHOULD align with the threat model in `docs/threat-model.html`. 
 - `SERVICE_SALT` MUST be a high-entropy secret (≥128 bits). It MUST NOT use the default values `"test_salt"` or `"default_salt"` in production and MUST NOT be committed to source control.
 - Raw `recipientDid` values received in `POST /store` bodies MUST NOT be logged or persisted beyond the immediate hash computation.
 - The janitor/admin purge mechanism (if exposed via HTTP) MUST be protected by a strong secret or DID-based ACL.
-
----
-
-## 9. Client Requirements
-
-While most normative requirements are written for nodes, the following obligations apply to clients and SDKs:
-
-- **Signature Construction:** Clients MUST compute the request hash exactly as defined in 3.2 (double SHA-256 with `bodyHashHex`) and sign the resulting bytes with Ed25519. The official `@didbox/sdk-crypto` package provides the reference `signRequest` implementation.
-- **Freshness:** Every request MUST use a fresh `X-DID-Timestamp` (within the 5-minute window) and a unique signature. Clients SHOULD never reuse a signature.
-- **402 Handling:** On receiving 402, clients SHOULD parse both `WWW-Authenticate` (L402) and `PAYMENT-REQUIRED` (x402) and support at least one advertised rail. After successful payment, the client retries the original request with the appropriate proof header (`Authorization: L402 ...` or `PAYMENT-SIGNATURE`).
-- **Inbox Alias Usage (as recipient):** When retrieving or listing items sent to a non-default `inboxAlias`, the client MUST supply the `X-Inbox-Alias` header (or use the alias in the URL path). Owners retrieving their own items may omit the header.
-- **Clock Synchronization:** Clients SHOULD maintain NTP-synchronized clocks. On 401 drift errors, clients SHOULD read the `Date` response header and adjust future timestamps.
-- **Discovery:** Clients SHOULD fetch `/.well-known/didbox-configuration` without auth headers and tolerate additional fields.
-- **Ciphertext:** Clients MUST base64-encode the encrypted payload before sending in `POST /store`.
-
-Implementers using the high-level `DidBoxClient` from `@didbox/sdk-core` inherit most of these behaviors when a correct `signRequest` function is supplied.
 
 ---
 **Version:** 0.6.2  

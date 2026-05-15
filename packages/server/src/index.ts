@@ -93,7 +93,7 @@ app.post('/inboxes', async (c) => {
   const hashedId = await hashDid(did + (alias || 'default'), salt);
 
   const creationFee = parseInt(c.env.INBOX_CREATION_FEE || '1000');
-  if (!(await verifyAnyPayment(c, creationFee))) {
+  if (!(await verifyAnyPayment(c, creationFee, 24))) {
     return issueDualChallenge(c, creationFee);
   }
 
@@ -138,7 +138,7 @@ app.post('/store', async (c) => {
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
   const price = calculateStoragePrice(sizeBytes, durationHours, baseRate);
 
-  if (!(await verifyAnyPayment(c, price))) {
+  if (!(await verifyAnyPayment(c, price, durationHours))) {
     return issueDualChallenge(c, price);
   }
 
@@ -239,7 +239,7 @@ app.post('/extend/:id', async (c) => {
   const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
   const extraCost = calculateStoragePrice(record.size_bytes, additionalHours, baseRate);
 
-  if (!(await verifyAnyPayment(c, extraCost))) {
+  if (!(await verifyAnyPayment(c, extraCost, additionalHours))) {
     return issueDualChallenge(c, extraCost);
   }
 

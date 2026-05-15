@@ -40,6 +40,11 @@ function extractPublicKeyFromDid(did: string): Uint8Array {
  * Enforces signature binding: Hash(Timestamp + Method + Path + Body_Hash)
  */
 export async function verifyDidSignature(c: Context, next: Next) {
+  // Discovery endpoint must be public (spec 7.1)
+  if (new URL(c.req.url).pathname === '/.well-known/didbox-configuration') {
+    return next();
+  }
+
   const did = c.req.header('X-DID');
   const signature = c.req.header('X-DID-Signature');
   const timestampHeader = c.req.header('X-DID-Timestamp');

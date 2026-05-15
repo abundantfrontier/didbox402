@@ -3,7 +3,14 @@ import { negotiatePayment } from '@didbox/sdk-payments';
 export interface DidBoxClientConfig {
   baseUrl: string;
   did: string;
-  signRequest: (data: string) => Promise<string>;
+  /**
+   * User-provided signing function.
+   * Must produce a hex Ed25519 signature over the exact binding:
+   * SHA256( UTF8(ts) + method + pathname + hex(SHA256(body)) )
+   *
+   * Recommended: use `signRequest` from '@didbox/sdk-crypto'
+   */
+  signRequest: (timestamp: number, method: string, path: string, body: string) => Promise<string>;
   /**
    * Automatically handle 402 challenges by calling negotiatePayment.
    * Defaults to false.
@@ -33,7 +40,8 @@ export class DidBoxClient {
     const body = options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : '';
     const timestamp = Date.now();
     
-    const signature = await this.config.signRequest(`${timestamp}${method}${path}${body}`);
+    // Pass components to user-provided signer (which should use the correct double-hash per spec 3.2)
+    const signature = await this.config.signRequest(timestamp, method, path, body);
 
     const headers = new Headers(options.headers);
     headers.set('X-DID', this.config.did);
