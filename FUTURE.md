@@ -23,22 +23,27 @@ Any future evolution of the protocol MUST adhere to this principle of **Cryptogr
 
 One of the core principles of didbox402 is that **clients retain full control of their cryptographic keys**. This creates interesting challenges when considering the movement of stored data between independent nodes.
 
-### Key Questions
+A detailed design for the first phase of Sovereign Mobility has been developed:
+
+→ **[v0.7.0 Sovereign Mobility – Phase 1 (Minimal Migration) Design](docs/designs/v070-sovereign-mobility-phase1.md)**
+
+### Key Questions (from earlier exploration)
 - How can a box (or its lease) be transferred from one didbox node to another without the client having to re-upload the data?
 - What cryptographic or authorization mechanisms would allow a new node to verify ownership of an existing box?
 - Should box migration be a first-class protocol feature, or should it be handled entirely at the client or commercial layer?
 - How do we maintain privacy and unlinkability during and after a move?
 
+### Current Direction (v0.7.0 Phase 1)
+The current approach favors a **client-mediated model** with a signed **Migration Authorization** issued by the source node. Key characteristics:
+- Data movement remains client-side.
+- The Migration Authorization is generic and third-party verifiable.
+- Destination nodes are not required to understand migrations in Phase 1.
+- Strong emphasis on extensibility for future enhanced flows (e.g., lease matching when presenting the authorization to the destination node).
+
 ### Considerations
 - Any migration mechanism must not require the client to reveal private keys to nodes.
-- There may be a need for time-limited, signed “migration tokens” or capability-based proofs.
-- Commercial providers may want different policies around data portability.
-
-### Possible Directions to Explore
-- Client-mediated migration (client coordinates between two nodes)
-- Cryptographic delegation of box ownership
-- Temporary dual-lease models during transition
-- Keeping migration entirely out of the core protocol
+- There is value in time-limited, signed migration proofs.
+- Commercial providers may want different policies around data portability and migration incentives.
 
 ---
 

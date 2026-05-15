@@ -14,13 +14,24 @@ This roadmap outlines the planned evolution of the **didbox402** protocol and re
 - [ ] Final Documentation & Messaging Polish (v0.6.2)
 
 ## Next Milestone: v0.7.0 (Sovereign Mobility + Production Polish)
-**Goal:** Enable agents to migrate effortlessly between nodes and providers. Phase 3 items from v0.6.2 (OpenAPI, full real payment rails, egress charging, advanced threat coverage) feed into this release.
+**Goal:** Enable agents to migrate effortlessly between nodes and providers while preserving cryptographic sovereignty.
 
-### Focus Areas:
-1.  **Identity Portability:** Documented migration paths for DID-based storage boxes.
-2.  **Verifiable Credentials (VCs):** Initial support for gated storage based on signed credentials.
-3.  **Cross-Rail Reliability:** Enhanced error recovery for interrupted x402 handshakes.
-4.  **Reference Implementations:** AWS Lambda and standard Node.js/MinIO reference nodes.
+### Phase 1 (Minimal Migration) – Design Document
+A detailed design for the first phase of Sovereign Mobility has been developed:
+
+→ **[v0.7.0 Sovereign Mobility – Phase 1 Design](docs/designs/v070-sovereign-mobility-phase1.md)**
+
+This phase introduces a client-orchestrated migration flow using a signed **Migration Authorization** issued by the source node. Key characteristics:
+- Client-mediated data movement (pull from source + push to destination)
+- Generic, third-party verifiable Migration Authorization
+- No changes required on destination nodes in Phase 1
+- Strong focus on privacy and future extensibility
+
+### Focus Areas for v0.7.0:
+1.  **Sovereign Mobility (Phase 1):** Verifiable migration paths using the Migration Authorization model (see design doc).
+2.  **Full Real Payment Rails:** Production-grade L402 (Alby) and x402 (viem) implementations with proper replay protection.
+3.  **Verifiable Credentials (VCs):** Initial support for gated storage based on signed credentials.
+4.  **Reference Implementations:** Additional platforms (AWS Lambda + S3, standard Node.js + MinIO).
 
 ## Long-Term Vision (v1.0.0 and beyond)
 **Goal:** A global, decentralized network of didbox402 nodes powering the agentic economy.

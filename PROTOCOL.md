@@ -376,5 +376,25 @@ Implementations **MUST** align with the threat model documented in `docs/threat-
 - The janitor/admin purge mechanism (if exposed via HTTP) MUST be protected by a strong secret or DID-based ACL.
 
 ---
+
+## 11. Future Work (v0.7.0+)
+
+The following areas are under active design for future versions of the protocol:
+
+### 11.1 Sovereign Mobility (Migration)
+
+A detailed design for the first phase of cross-node migration has been developed:
+
+→ **[v0.7.0 Sovereign Mobility – Phase 1 Design](docs/designs/v070-sovereign-mobility-phase1.md)**
+
+This phase introduces a client-orchestrated migration model using a signed **Migration Authorization** issued by the source node. Key properties of the Phase 1 design:
+- Data movement remains entirely client-side.
+- The Migration Authorization is generic and third-party verifiable.
+- Destination nodes are not required to recognize or specially handle migrations.
+- Strong emphasis on privacy and future extensibility (optional presentation of the authorization to the destination node in later phases).
+
+Implementation of the `/migrate/{id}/authorize` endpoint and the Migration Authorization format is planned for v0.7.0.
+
+---
 **Version:** 0.6.2  
 **Status:** Open Protocol Specification
