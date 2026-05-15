@@ -47,6 +47,11 @@ Every signature MUST be unique and temporally bound.
 2. **Drift Window:** Servers MUST reject requests with a timestamp drift > 5 minutes.
 3. **Nonce Tracking:** Servers MUST cache every signature within the 5-minute window and reject any re-used signature.
 
+**Clock Skew Recommendations:**
+- **Clients:** SHOULD synchronize with a reliable NTP source. If a request fails with a 401 due to drift, clients SHOULD attempt to re-sync or use the server's `Date` header to calculate local offset.
+- **Servers:** MUST include a `Date` header in every response to help clients detect skew.
+- **Grace Period:** Implementations MAY allow a small buffer (e.g., 5-10 seconds) beyond the 5-minute window to account for network latency.
+
 ---
 
 ## 4. Economics (The Rail)
@@ -74,6 +79,16 @@ Nodes MUST respond to unpaid requests with `402 Payment Required` and the follow
 }
 ```
 
+### 4.3 x402 Settlement Flow
+The x402 rail enables push-based payments using Web3 rails (e.g., USDC on Base).
+1. **Challenge:** Server returns `402` with the `PAYMENT-REQUIRED` header containing the recipient `address` and `amount`.
+2. **Settlement:** Client broadcasts a transaction on the specified `network` transferring the exact `amount` to the `address`.
+3. **Proof:** Client retries the request with the `PAYMENT-SIGNATURE` header.
+4. **Verification:**
+   - The `PAYMENT-SIGNATURE` MUST be the transaction hash (e.g., `0x...`).
+   - The server MUST verify the transaction on-chain.
+   - The transaction MUST be successful, match the expected `amount`, `currency`, and `recipient address`, and MUST NOT have been used for a previous request (replay protection).
+
 ---
 
 ## 5. API Specification
@@ -86,21 +101,103 @@ Compliant nodes MUST use the following standardized error codes:
 - `410 Gone`: Resource lease has expired.
 - `413 Payload Too Large`: Payload exceeds node limits (SHOULD be 10MB+).
 
-### 5.2 Endpoints
+### 5.2 Storage Operations
 
 #### `POST /store`
 Creates a new storage lease.
-- **Request Body:** `{ ciphertext: string, durationHours: number, recipientDid?: string, inboxAlias?: string }`
-- **Fulfillment:** Requires `Authorization: L402 ...` or `PAYMENT-SIGNATURE: ...`.
+- **Request Body:**
+```json
+{
+  "ciphertext": "string",
+  "durationHours": 24,
+  "recipientDid": "did:key:z6Mk...",
+  "inboxAlias": "default"
+}
+```
+- **Response (200 OK):**
+```json
+{
+  "storageId": "uuid",
+  "expiresAt": "ISO8601-Timestamp",
+  "sizeBytes": 1234,
+  "pricePaidSatoshis": 1000
+}
+```
 
 #### `GET /retrieve/{id}`
 Retrieves box content.
 - **Headers:** `X-Inbox-Alias` (REQUIRED if caller is a recipient of a scoped inbox).
+- **Response (200 OK):**
+```json
+{
+  "ciphertext": "string"
+}
+```
+
+#### `POST /extend/{id}`
+Extends an existing lease.
+- **Request Body:** `{ "additionalHours": 24 }`
+- **Response (200 OK):** `{ "storageId": "uuid", "newExpiresAt": "ISO8601-Timestamp", "additionalCostSatoshis": 500 }`
+
+### 5.3 Economics & Discovery
+
+#### `GET /price`
+Returns current rates for storage and services.
+- **Response (200 OK):**
+```json
+{
+  "base_rate_per_mb_hour": 100,
+  "inbox_creation_fee": 1000,
+  "egress_rate_per_mb": 0,
+  "min_charge_mb": 1
+}
+```
+
+#### `GET /leases`
+Lists all active leases created by the authenticated DID.
+- **Response (200 OK):**
+```json
+{
+  "leases": [
+    {
+      "id": "uuid",
+      "sizeBytes": 1234,
+      "expiresAt": "ISO8601-Timestamp",
+      "recipientHash": "sha256(did+alias+salt)"
+    }
+  ]
+}
+```
+
+### 5.4 Inbox Operations
+
+#### `GET /inbox/{alias}`
+Lists active boxes sent to the authenticated DID in the specified alias.
+- **Response (200 OK):**
+```json
+{
+  "alias": "default",
+  "items": [
+    { "id": "uuid", "sizeBytes": 1234, "expiresAt": "ISO8601-Timestamp" }
+  ]
+}
+```
+
+#### `POST /inboxes`
+Provisions a new named inbox. Requires a one-time creation fee.
+- **Request Body:** `{ "alias": "project-x" }`
+- **Response (200 OK):** `{ "alias": "project-x", "hashedId": "...", "feePaid": 1000 }`
 
 ---
 
-## 6. Metadata Privacy
+## 6. Metadata Privacy & Scoping
 
+### 6.1 Inbox Scoping
+Inboxes are cryptographically isolated. A recipient only sees items sent to a specific `alias` when they query `/inbox/{alias}`.
+- **Default Inbox:** If no `inboxAlias` is specified during `POST /store`, the item is placed in the `default` inbox.
+- **Isolation:** Knowing the ID of a box in one inbox does not grant access to boxes in another inbox, as access is verified via `Identity_Hash`.
+
+### 6.2 Identity Hashing
 Nodes MUST NOT store raw recipient DIDs in lookup indexes. All identifiers MUST be stored as salted hashes.
 `Identity_Hash = SHA256(Recipient_DID + Alias + Service_Salt)`
 
@@ -123,6 +220,7 @@ Compliant nodes MUST advertise their capabilities at `/.well-known/didbox-config
     "store": "/store",
     "retrieve": "/retrieve/:id",
     "inbox": "/inbox/:alias",
+    "leases": "/leases",
     "price": "/price"
   }
 }

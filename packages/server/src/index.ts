@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { verifyDidSignature, hashDid } from './middleware/did';
 import { calculateStoragePrice, calculateRetrievalPrice } from './lib/pricing';
-import { saveStorageRecord, getStorageRecord, updateExpiration, getInboxRecords, saveInbox, getInboxes, getExpiredRecords, deleteStorageRecord } from './lib/storage';
+import { saveStorageRecord, getStorageRecord, updateExpiration, getInboxRecords, saveInbox, getInboxes, getExpiredRecords, deleteStorageRecord, getOwnerRecords } from './lib/storage';
 import { verifyAnyPayment, issueDualChallenge } from './lib/payments';
 import { Env } from './types/env';
 
@@ -20,16 +20,12 @@ async function getJsonBody(c: any) {
 app.use('*', verifyDidSignature);
 
 /**
- * GET /price
- * Discover current storage and egress rates.
- */
-/**
  * GET /.well-known/didbox-configuration
  * Capability discovery for the node.
  */
 app.get('/.well-known/didbox-configuration', async (c) => {
   return c.json({
-    version: '0.6.0',
+    version: '0.6.1',
     supported_rails: ['L402', 'x402'],
     limits: {
       max_payload_bytes: 10 * 1024 * 1024,
@@ -39,6 +35,7 @@ app.get('/.well-known/didbox-configuration', async (c) => {
       store: '/store',
       retrieve: '/retrieve/:id',
       inbox: '/inbox/:alias',
+      leases: '/leases',
       price: '/price'
     }
   });
@@ -52,6 +49,25 @@ app.get('/price', async (c) => {
     min_charge_mb: 1
   });
 });
+
+/**
+ * GET /leases
+ * Lists all active leases created by the authenticated DID.
+ */
+app.get('/leases', async (c) => {
+  const ownerHash = c.get('hashedDid');
+  const records = await getOwnerRecords(c.env.DB, ownerHash);
+  
+  return c.json({ 
+    leases: records.map(r => ({
+      id: r.id,
+      sizeBytes: r.size_bytes,
+      expiresAt: r.expires_at,
+      recipientHash: r.recipient_hash
+    }))
+  });
+});
+
 /**
  * POST /inboxes
  * Creates a named inbox for the authenticated DID.

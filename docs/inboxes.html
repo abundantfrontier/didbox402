@@ -37,16 +37,16 @@
         <h2>Cryptographic Mechanism</h2>
         <p>An inbox is defined by its <strong>Alias</strong> (a string like <code>"project-x"</code> or <code>"alerts"</code>). The server identifies an inbox using a salted identity hash:</p>
         
-        <pre>Inbox_ID = SHA256(Recipient_DID + Inbox_Alias + Service_Salt)</pre>
+        <pre>Identity_Hash = SHA256(Recipient_DID + Inbox_Alias + Service_Salt)</pre>
 
         <div class="inbox-card">
-            <h3>1. Creation & Provisioning</h3>
-            <p>An agent creates a new inbox via <code>POST /inboxes</code>. This operation carries a <strong>one-time creation fee</strong> (via x402) to prevent spam-provisioning.</p>
+            <h3>1. Provisioning</h3>
+            <p>An agent creates a new inbox via <code>POST /inboxes</code>. This operation carries a <strong>one-time creation fee</strong> (via x402 or L402) to prevent spam-provisioning.</p>
         </div>
 
         <div class="inbox-card">
             <h3>2. Targeted Storage</h3>
-            <p>When an agent stores data for a recipient, they can specify the <code>inboxAlias</code>. The sender pays the standard storage fee.</p>
+            <p>When an agent stores data for a recipient, they can specify the <code>inboxAlias</code>. If omitted, it defaults to <code>"default"</code>. The sender pays the standard storage fee.</p>
         </div>
 
         <div class="inbox-card">
@@ -58,7 +58,7 @@
         <ul>
             <li><strong>Provisioning Fee:</strong> Paid by the Inbox Owner (one-time).</li>
             <li><strong>Storage Fee:</strong> Paid by the Sender (per-object).</li>
-            <li><strong>Renewal/Extension Fee:</strong> Paid by the Owner or Recipient.</li>
+            <li><strong>Extension Fee:</strong> Paid by the Owner (to extend a box's life).</li>
         </ul>
     </div>
 </body>

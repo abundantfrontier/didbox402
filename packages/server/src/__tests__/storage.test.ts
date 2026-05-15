@@ -90,6 +90,43 @@ describe('Storage Operations', () => {
     expect(retrieved.ciphertext).toBe('storage_test');
   });
 
+  test('GET /leases: Lists active leases for owner', async () => {
+    // 1. Store something (using DEV_MODE to bypass payment)
+    const timestamp = Date.now();
+    const payload = { ciphertext: 'lease_test_data', durationHours: 10 };
+    const sig = await signRequest('POST', '/store', JSON.stringify(payload), timestamp);
+
+    await worker.fetch(new Request('http://localhost/store', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-DID': MY_DID,
+        'X-DID-Signature': sig,
+        'X-DID-Timestamp': timestamp.toString()
+      },
+      body: JSON.stringify(payload)
+    }), { ...env, DEV_MODE: 'true' }, createExecutionContext());
+
+    // 2. Call /leases
+    const leasesTimestamp = Date.now() + 10;
+    const leasesSig = await signRequest('GET', '/leases', '', leasesTimestamp);
+
+    const leasesRes = await worker.fetch(new Request('http://localhost/leases', {
+      headers: {
+        'X-DID': MY_DID,
+        'X-DID-Signature': leasesSig,
+        'X-DID-Timestamp': leasesTimestamp.toString()
+      }
+    }), env, createExecutionContext());
+
+    expect(leasesRes.status).toBe(200);
+    const data = await leasesRes.json() as any;
+    expect(data.leases.length).toBeGreaterThan(0);
+    expect(data.leases[0]).toHaveProperty('id');
+    expect(data.leases[0]).toHaveProperty('sizeBytes');
+    expect(data.leases[0]).toHaveProperty('expiresAt');
+  });
+
   test('Privacy Invariant: Raw DID never appears in DB', async () => {
     const { results } = await env.DB.prepare("SELECT * FROM storage_records").all();
     for (const row of results as any[]) {

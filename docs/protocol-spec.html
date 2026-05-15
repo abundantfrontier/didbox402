@@ -50,25 +50,43 @@
             <li><code>X-DID-Timestamp</code>: Unix Epoch in milliseconds.</li>
         </ul>
 
+        <h3>2.2 Clock Skew</h3>
+        <p>Servers MUST reject requests with a timestamp drift > 5 minutes. Servers MUST include a <code>Date</code> header to assist clients in synchronization.</p>
+
         <h2>3. Economics (The Rail)</h2>
-        <p>Resource allocation uses the <strong>402 Payment Required</strong> standard over the Lightning Network.</p>
+        <p>Resource allocation uses the <strong>402 Payment Required</strong> standard over Lightning (L402) or Web3 (x402).</p>
         
         <h3>3.1 Dynamic Pricing</h3>
         <pre>Total_Cost = Math.max(1MB, Size) * Duration_Hours * Base_Rate</pre>
 
+        <h3>3.2 x402 Settlement</h3>
+        <p>Proof of payment is provided via the <code>PAYMENT-SIGNATURE</code> header containing the transaction hash of a successful USDC transfer to the node's address.</p>
+
         <h2>4. API Specification</h2>
+        
         <h3>4.1 <code>POST /store</code></h3>
         <p>Leases a new storage box.</p>
         <pre>Request Body: { ciphertext, durationHours, recipientDid?, inboxAlias? }</pre>
+        <pre>Response: { storageId, expiresAt, sizeBytes, pricePaidSatoshis }</pre>
 
         <h3>4.2 <code>GET /retrieve/{id}</code></h3>
         <p>Retrieves box ciphertext.</p>
+        <pre>Response: { ciphertext }</pre>
 
         <h3>4.3 <code>GET /inbox/{alias}</code></h3>
         <p>Lists active boxes for the authenticated DID in the specified alias.</p>
+        <pre>Response: { alias, items: [{ id, sizeBytes, expiresAt }] }</pre>
+
+        <h3>4.4 <code>GET /leases</code></h3>
+        <p>Lists all active leases created by the authenticated DID.</p>
+        <pre>Response: { leases: [{ id, sizeBytes, expiresAt, recipientHash }] }</pre>
+
+        <h3>4.5 <code>GET /price</code></h3>
+        <p>Discover current rates.</p>
+        <pre>Response: { base_rate_per_mb_hour, inbox_creation_fee, ... }</pre>
 
         <hr>
-        <p style="font-size: 0.9rem; color: #666;">Version: 0.3.0 | Status: Beta Draft</p>
+        <p style="font-size: 0.9rem; color: #666;">Version: 0.6.1 | Status: Stable Draft</p>
     </div>
 </body>
 </html>

@@ -69,6 +69,14 @@ export async function getInboxRecords(db: D1Database, recipientHash: string): Pr
   return results as unknown as StorageRecord[];
 }
 
+export async function getOwnerRecords(db: D1Database, ownerHash: string): Promise<StorageRecord[]> {
+  const { results } = await db
+    .prepare("SELECT * FROM storage_records WHERE owner_hash = ? AND expires_at > ?")
+    .bind(ownerHash, new Date().toISOString())
+    .all();
+  return results as unknown as StorageRecord[];
+}
+
 export async function deleteStorageRecord(db: D1Database, id: string) {
   return db.prepare("DELETE FROM storage_records WHERE id = ?").bind(id).run();
 }

@@ -112,7 +112,8 @@ describe('didbox402 Protocol v0.4.0 Conformance', () => {
     const res = await worker.fetch(req, env, createExecutionContext());
     expect(res.status).toBe(200);
     const data: any = await res.json();
-    expect(data.version).toBe('0.6.0');
+    expect(data.version).toBe('0.6.1');
     expect(data.supported_rails).toContain('L402');
+    expect(data.endpoints.leases).toBe('/leases');
   });
 });

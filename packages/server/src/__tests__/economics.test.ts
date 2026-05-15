@@ -108,15 +108,12 @@ describe('Economics & Limits Hardening', () => {
     });
 
     const res = await worker.fetch(req, env, createExecutionContext());
-    // Current implementation doesn't check max duration yet. 
-    // I should implement this check in index.ts and verify it here.
     expect(res.status).toBe(400); 
     const data: any = await res.json();
     expect(data.error).toContain('Max duration');
   });
 
   test('Payload Size Limit: Rejects extremely large payloads', async () => {
-    // 25MB payload (Cloudflare Worker limit is usually 100MB, but let's set a protocol limit of 10MB for MVP)
     const giantBody = 'x'.repeat(11 * 1024 * 1024);
     const body = JSON.stringify({ ciphertext: giantBody, durationHours: 1 });
     const timestamp = Date.now();
@@ -135,5 +132,27 @@ describe('Economics & Limits Hardening', () => {
 
     const res = await worker.fetch(req, env, createExecutionContext());
     expect(res.status).toBe(413); // Payload Too Large
+  });
+
+  test('GET /price: Returns correct schema and authentication', async () => {
+    const timestamp = Date.now();
+    const sig = await signRequest('GET', '/price', '', timestamp);
+
+    const req = new Request('http://localhost/price', {
+      headers: {
+        'X-DID': MY_DID,
+        'X-DID-Signature': sig,
+        'X-DID-Timestamp': timestamp.toString()
+      }
+    });
+
+    const res = await worker.fetch(req, env, createExecutionContext());
+    expect(res.status).toBe(200);
+    const data: any = await res.json();
+    expect(data).toHaveProperty('base_rate_per_mb_hour');
+    expect(data).toHaveProperty('inbox_creation_fee');
+    expect(data).toHaveProperty('egress_rate_per_mb');
+    expect(data).toHaveProperty('min_charge_mb');
+    expect(data.min_charge_mb).toBe(1);
   });
 });
