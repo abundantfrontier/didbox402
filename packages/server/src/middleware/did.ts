@@ -77,11 +77,16 @@ export async function verifyDidSignature(c: Context, next: Next) {
     const bodyHash = sha256(new TextEncoder().encode(bodyText));
     const requestHash = sha256(new TextEncoder().encode(`${timestamp}${method}${path}${Buffer.from(bodyHash).toString('hex')}`));
 
-    const sigBytes = signature === 'mock_sig' ? new Uint8Array(64) : Buffer.from(signature, 'hex');
+    const sigBytes = Buffer.from(signature, 'hex');
     const isValid = await ed.verify(sigBytes, requestHash, publicKey);
 
-    if (!isValid && signature !== 'mock_sig') { 
-      return c.json({ error: 'Invalid DID Signature' }, 401);
+    if (!isValid) {
+      // Only allow mock_sig in explicit DEV_MODE for local testing (per spec 3.2)
+      if (signature === 'mock_sig' && c.env.DEV_MODE === 'true') {
+        // test bypass only
+      } else {
+        return c.json({ error: 'Invalid DID Signature' }, 401);
+      }
     }
 
 

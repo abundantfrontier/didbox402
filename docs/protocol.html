@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.6.1) | Protocol Spec</title>
+    <title>didbox402 (v0.6.2) | Protocol Spec</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -26,13 +26,13 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Handshake: Protocol Spec <span style="font-size: 0.5em; opacity: 0.7;">v0.6.1</span></h1>
+        <h1>The Handshake: Protocol Spec <span style="font-size: 0.5em; opacity: 0.7;">v0.6.2</span></h1>
 
         <div class="anchor-box">
-            Formal Specification: <a href="protocol-spec.html">PROTOCOL.md (v0.6.1)</a>
+            Formal Specification: <a href="protocol-spec.html">PROTOCOL.md (v0.6.2)</a>
         </div>
 
-        <p>Interaction with didbox402 is stateless and authenticated via DID-signed HTTP headers. Version v0.6.1 introduces <strong>Unified 402 Support</strong>.</p>
+        <p>Interaction with didbox402 is stateless and authenticated via DID-signed HTTP headers. Version v0.6.2 introduces <strong>Unified 402 Support</strong>.</p>
 
         <h2>Required Headers</h2>
         <table class="spec-table">
@@ -73,7 +73,7 @@
         </table>
 
         <h2>The x402 Handshake</h2>
-        <p>didbox402 v0.6.1 nodes emit standard challenges based on the client's supported rails:</p>
+        <p>didbox402 v0.6.2 nodes emit standard challenges based on the client's supported rails:</p>
         <ul>
             <li><strong>L402 Challenge:</strong> <code>WWW-Authenticate: L402 macaroon="...", invoice="..."</code></li>
             <li><strong>x402 Challenge:</strong> <code>PAYMENT-REQUIRED: {Base64 requirements}</code></li>

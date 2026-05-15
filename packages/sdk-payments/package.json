@@ -1,6 +1,6 @@
 {
   "name": "@didbox/sdk-payments",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "main": "src/index.ts",
   "scripts": {
     "test": "echo 'No tests yet'"

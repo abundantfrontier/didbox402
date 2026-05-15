@@ -16,6 +16,7 @@ describe('didbox402: Economics Conformance', () => {
     expect(res.status).toBe(200);
     const data = await res.json() as any;
     expect(data).toHaveProperty('supported_rails');
-    expect(data).toHaveProperty('protocol_version');
+    expect(data.protocol_version).toBe('0.6.2');
+    expect(data.limits?.min_charge_mb).toBe(1);
   });
 });

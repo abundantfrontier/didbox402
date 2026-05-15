@@ -8,6 +8,14 @@ import { Env } from './types/env';
 const app = new Hono<{ Bindings: Env }>();
 
 /**
+ * Global response middleware: add Date header on every response (required by spec 3.2).
+ */
+app.use('*', async (c, next) => {
+  await next();
+  c.header('Date', new Date().toUTCString());
+});
+
+/**
  * Helper to get JSON body from context or request.
  */
 async function getJsonBody(c: any) {
@@ -24,17 +32,21 @@ app.use('*', verifyDidSignature);
  * Capability discovery for the node.
  */
 app.get('/.well-known/didbox-configuration', async (c) => {
+  // NOTE: This endpoint MUST be public (no DID auth) per spec 7.1
   return c.json({
-    version: '0.6.1',
+    protocol_version: '0.6.2',
     supported_rails: ['L402', 'x402'],
     limits: {
       max_payload_bytes: 10 * 1024 * 1024,
-      max_duration_hours: 8760
+      max_lease_hours: 8760,
+      min_charge_mb: 1
     },
     endpoints: {
       store: '/store',
-      retrieve: '/retrieve/:id',
-      inbox: '/inbox/:alias',
+      retrieve: '/retrieve/{id}',
+      extend: '/extend/{id}',
+      inbox: '/inbox/{alias}',
+      inboxes: '/inboxes',
       leases: '/leases',
       price: '/price'
     }

@@ -100,20 +100,16 @@ describe('didbox402 Protocol v0.4.0 Conformance', () => {
     expect(res2.status).toBe(200);
   });
 
-  test('5. Capability Discovery: Returns standard configuration', async () => {
-    const req = new Request('http://localhost/.well-known/didbox-configuration', {
-      headers: {
-        'X-DID': MY_DID,
-        'X-DID-Signature': 'mock_sig', // Discovery usually doesn't require complex sigs but middleware is global
-        'X-DID-Timestamp': Date.now().toString()
-      }
-    });
+  test('5. Capability Discovery: Returns standard configuration (public endpoint per spec 7.1)', async () => {
+    // Discovery must work without auth headers (or with DEV_MODE + mock_sig)
+    const req = new Request('http://localhost/.well-known/didbox-configuration');
 
     const res = await worker.fetch(req, env, createExecutionContext());
     expect(res.status).toBe(200);
     const data: any = await res.json();
-    expect(data.version).toBe('0.6.1');
+    expect(data.protocol_version).toBe('0.6.2');
     expect(data.supported_rails).toContain('L402');
-    expect(data.endpoints.leases).toBe('/leases');
+    expect(data.limits.min_charge_mb).toBe(1);
+    expect(data.endpoints.inboxes).toBe('/inboxes');
   });
 });
