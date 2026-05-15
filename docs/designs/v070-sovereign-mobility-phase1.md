@@ -1,6 +1,6 @@
 # Design: Sovereign Mobility – Phase 1 (Minimal Migration)
 
-**Status:** Reviewed & Revised (Post-Panel Review)  
+**Status:** Finalized for Implementation  
 **Target Release:** v0.7.0  
 **Date:** 2026-05-14  
 **Author:** Grok (based on team discussion + panel review)
@@ -126,27 +126,35 @@ Clients that want maximum stealth can request a minimal authorization containing
 - `issued_at` / `expires_at`
 - `signature`
 
-### 4.3 Node Identity & Signing Keys (Added Post-Panel)
+### 4.3 Node Identity & Signing Keys (Required for v0.7.0)
 
-For the Migration Authorization to be third-party verifiable, nodes must have an identity.
+Because the protocol is still early (no backwards compatibility requirement), **every compliant node in v0.7.0 MUST publish a node identity**.
 
-**Phase 1 Requirements:**
+**Requirements:**
 
-- Every node **SHOULD** publish a `node_did` (did:key) and its corresponding Ed25519 public key in the `/.well-known/didbox-configuration` response.
-- Recommended addition to Discovery:
+- Every node **MUST** have a `did:key` (Ed25519 only).
+- Nodes **MUST** use a **dedicated Ed25519 signing key** for protocol artifacts (such as Migration Authorizations). This key **SHOULD** be separate from any administrative or operational keys.
+- The node identity **MUST** be published in the `/.well-known/didbox-configuration` response.
+
+**Discovery Response (Normative):**
 
 ```json
 {
-  "protocol_version": "0.6.2",
-  ...
+  "protocol_version": "0.7.0",
+  "supported_rails": ["L402", "x402"],
+  "limits": { ... },
+  "endpoints": { ... },
   "node_identity": {
     "did": "did:key:z6Mk...",
-    "public_key": "base58btc or hex of the Ed25519 public key"
+    "public_key": "z6Mk..."   // base58btc multibase encoding of the raw Ed25519 public key
   }
 }
 ```
 
-This is the **minimum** required to make the design workable. Full node DID support can be expanded in later releases.
+**Key Management Notes:**
+- The signing key must be protected at least as well as any secrets used for payment providers or admin tokens.
+- For v0.7.0, key rotation is supported by simply publishing a new `node_identity`. Old Migration Authorizations remain valid until they expire.
+- Verifiers **MUST** fetch the current `node_identity` from the node’s discovery endpoint to validate signatures.
 
 ---
 

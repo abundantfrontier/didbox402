@@ -3,6 +3,7 @@ export interface StorageRecord {
   owner_hash: string;
   recipient_hash: string | null;
   size_bytes: number;
+  ciphertext_hash?: string | null;   // Added in v0.7.0 for migration support
   created_at: string;
   expires_at: string;
 }
@@ -17,13 +18,16 @@ export interface InboxRecord {
 export async function saveStorageRecord(db: D1Database, record: StorageRecord) {
   return db
     .prepare(
-      "INSERT INTO storage_records (id, owner_hash, recipient_hash, size_bytes, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)"
+      `INSERT INTO storage_records 
+       (id, owner_hash, recipient_hash, size_bytes, ciphertext_hash, created_at, expires_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       record.id,
       record.owner_hash,
       record.recipient_hash,
       record.size_bytes,
+      record.ciphertext_hash ?? null,
       record.created_at,
       record.expires_at
     )

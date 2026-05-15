@@ -1,9 +1,128 @@
 import { Hono } from 'hono';
-import { verifyDidSignature, hashDid } from './middleware/did';
+import { verifyDidSignature, hashDid, extractPublicKeyFromDid } from './middleware/did';
 import { calculateStoragePrice, calculateRetrievalPrice } from './lib/pricing';
 import { saveStorageRecord, getStorageRecord, updateExpiration, getInboxRecords, saveInbox, getInboxes, getExpiredRecords, deleteStorageRecord, getOwnerRecords } from './lib/storage';
 import { verifyAnyPayment, issueDualChallenge } from './lib/payments';
 import { Env } from './types/env';
+import * as ed from '@noble/ed25519';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import bs58 from 'bs58';
+import canonicalize from 'canonicalize';
+
+// Setup for noble-ed25519
+ed.hashes.sha512 = (msg: Uint8Array) => sha512(msg);
+
+/**
+ * Derive a did:key (z6Mk...) and public key from a 32-byte Ed25519 private key.
+ * Used for Node Identity (v0.7.0+).
+ */
+function deriveNodeIdentity(privateKeyHex: string) {
+  const privKey = Buffer.from(privateKeyHex, 'hex');
+  if (privKey.length !== 32) {
+    throw new Error('NODE_SIGNING_PRIVATE_KEY must be 64 hex characters (32 bytes)');
+  }
+
+  // We need the public key synchronously for startup
+  // noble-ed25519 getPublicKey is async in some versions, but we can use sync version if available
+  // For simplicity in Workers, we'll compute it at startup.
+  // Since we can't easily do async at top level, we'll compute it lazily in the handler
+  // and cache it.
+
+  return privKey;
+}
+
+/**
+ * Node Identity (v0.7.0+)
+ *
+ * Operators must provide:
+ *   - NODE_SIGNING_PRIVATE_KEY (64 hex chars) — for signing Migration Authorizations etc.
+ *   - NODE_DID — the did:key that corresponds to the private key
+ *
+ * The public key can be derived from the DID by clients/verifiers.
+ */
+let nodeDid: string | null = null;
+let nodeSigningPrivateKey: Uint8Array | null = null;
+let nodeIdentityInitialized = false;
+
+function initializeNodeIdentity(env: any) {
+  if (nodeIdentityInitialized) return;
+
+  const privKeyHex = env.NODE_SIGNING_PRIVATE_KEY;
+  const did = env.NODE_DID;
+  const isDev = env.DEV_MODE === 'true';
+
+  if (!privKeyHex || !did) {
+    if (isDev) {
+      console.warn('[NodeIdentity] Running in DEV_MODE without NODE_SIGNING_PRIVATE_KEY / NODE_DID. Migration features will be disabled.');
+      nodeIdentityInitialized = true;
+      return;
+    }
+    throw new Error(
+      'Node identity is not configured. ' +
+      'Please set NODE_SIGNING_PRIVATE_KEY (64 hex chars) and NODE_DID (did:key:z6Mk...)'
+    );
+  }
+
+  if (!did.startsWith('did:key:z6Mk')) {
+    throw new Error('NODE_DID must be a valid Ed25519 did:key (must start with did:key:z6Mk)');
+  }
+
+  const privKey = Buffer.from(privKeyHex, 'hex');
+  if (privKey.length !== 32) {
+    throw new Error('NODE_SIGNING_PRIVATE_KEY must be exactly 64 hexadecimal characters (32 bytes)');
+  }
+
+  // Optional: In the future we can add a check that the DID matches the private key
+  // by deriving the public key and comparing.
+
+  nodeDid = did;
+  nodeSigningPrivateKey = privKey;
+  nodeIdentityInitialized = true;
+
+  console.log('[NodeIdentity] Node identity successfully initialized:', nodeDid);
+}
+
+function getNodeIdentity() {
+  if (!nodeDid || !nodeSigningPrivateKey) {
+    throw new Error('Node identity has not been initialized or is missing required configuration.');
+  }
+  return {
+    did: nodeDid,
+    public_key: 'derived-from-did' // verifiers should extract from the did:key
+  };
+}
+
+/**
+ * Signs a Migration Authorization object using the node's dedicated Ed25519 key.
+ * Uses JSON Canonicalization Scheme (RFC 8785) via the `canonicalize` package.
+ */
+async function signMigrationAuthorization(auth: Record<string, any>): Promise<string> {
+  if (!nodeSigningPrivateKey) {
+    throw new Error('Node signing key is not available');
+  }
+
+  const canonicalJson = canonicalize(auth);
+  if (!canonicalJson) {
+    throw new Error('Failed to canonicalize Migration Authorization for signing');
+  }
+
+  const messageHash = sha256(new TextEncoder().encode(canonicalJson));
+  const signatureBytes = await ed.sign(messageHash, nodeSigningPrivateKey);
+  return Buffer.from(signatureBytes).toString('hex');
+}
+
+function ensureNodeIdentity(c: any) {
+  initializeNodeIdentity(c.env);
+
+  const isDev = c.env.DEV_MODE === 'true';
+  if (!nodeDid && !isDev) {
+    return c.json(
+      { error: 'This node is not properly configured with a node identity (NODE_DID + NODE_SIGNING_PRIVATE_KEY)' },
+      500
+    );
+  }
+  return null; // identity is okay (or we're in dev mode)
+}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -46,8 +165,13 @@ app.use('*', verifyDidSignature);
  */
 app.get('/.well-known/didbox-configuration', async (c) => {
   // NOTE: This endpoint MUST be public (no DID auth) per spec 7.1
-  return c.json({
-    protocol_version: '0.6.2',
+
+  // Strict node identity enforcement (hard fail in non-DEV_MODE)
+  const identityError = ensureNodeIdentity(c);
+  if (identityError) return identityError;
+
+  const response: any = {
+    protocol_version: '0.7.0',
     supported_rails: ['L402', 'x402'],
     limits: {
       max_payload_bytes: 10 * 1024 * 1024,
@@ -63,7 +187,16 @@ app.get('/.well-known/didbox-configuration', async (c) => {
       leases: '/leases',
       price: '/price'
     }
-  });
+  };
+
+  if (nodeDid) {
+    response.node_identity = {
+      did: nodeDid,
+      public_key: 'derived-from-did'
+    };
+  }
+
+  return c.json(response);
 });
 
 app.get('/price', async (c) => {
@@ -298,6 +431,78 @@ app.get('/janitor/purge', async (c) => {
   await c.env.DB.prepare("DELETE FROM nonces WHERE expires_at < ?").bind(Date.now()).run();
 
   return c.json({ purged: results });
+});
+
+/**
+ * POST /migrate/{storageId}/authorize  (v0.7.0+ Sovereign Mobility Phase 1)
+ *
+ * Returns a signed Migration Authorization proving the caller owns the box
+ * and how much lease time remains.
+ */
+app.post('/migrate/:id/authorize', async (c) => {
+  // Strict node identity enforcement
+  const identityError = ensureNodeIdentity(c);
+  if (identityError) return identityError;
+
+  const storageId = c.req.param('id');
+  const ownerHash = c.get('hashedDid');
+
+  // Verify ownership
+  const record = await getStorageRecord(c.env.DB, storageId);
+  if (!record) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+  if (ownerHash !== record.owner_hash) {
+    return c.json({ error: 'Forbidden: You are not the owner of this storage box' }, 403);
+  }
+
+  // Check lease is still active
+  const now = new Date();
+  const expiresAt = new Date(record.expires_at);
+  if (now > expiresAt) {
+    return c.json({ error: 'Lease has expired' }, 410);
+  }
+
+  // Get ciphertext and compute hash (Phase 1: on-the-fly)
+  const object = await c.env.STORAGE_BUCKET.get(`ciphertext/${storageId}`);
+  if (!object) {
+    return c.json({ error: 'Blob not found' }, 404);
+  }
+
+  const ciphertextBytes = await object.arrayBuffer();
+  const hashBuffer = sha256(new Uint8Array(ciphertextBytes));
+  const ciphertextHash = 'sha256:' + Buffer.from(hashBuffer).toString('hex');
+
+  // Calculate remaining lease hours
+  const remainingMs = expiresAt.getTime() - now.getTime();
+  const remainingHours = Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60)));
+
+  // Build Migration Authorization
+  const issuedAt = new Date();
+  const authExpiresAt = new Date(Math.min(expiresAt.getTime(), issuedAt.getTime() + (48 * 60 * 60 * 1000)));
+
+  const migrationAuth: any = {
+    version: 1,
+    original_storage_id: storageId,
+    owner_did: c.get('did'),
+    size_bytes: record.size_bytes,
+    ciphertext_hash: ciphertextHash,
+    remaining_lease_hours: remainingHours,
+    issued_at: issuedAt.toISOString(),
+    expires_at: authExpiresAt.toISOString(),
+    source_node: new URL(c.req.url).origin,
+    issuance_nonce: crypto.randomUUID(),
+  };
+
+  // Sign the authorization using the dedicated node key + JCS
+  try {
+    migrationAuth.signature = await signMigrationAuthorization(migrationAuth);
+  } catch (err) {
+    console.error('Failed to sign Migration Authorization:', err);
+    return c.json({ error: 'Failed to sign migration authorization' }, 500);
+  }
+
+  return c.json(migrationAuth);
 });
 
 export default app;

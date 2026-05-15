@@ -293,7 +293,7 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
 
 ```json
 {
-  "protocol_version": "0.6.2",
+  "protocol_version": "0.7.0",
   "supported_rails": ["L402", "x402"],
   "limits": {
     "max_payload_bytes": 10485760,
@@ -308,6 +308,10 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
     "inboxes": "/inboxes",
     "leases": "/leases",
     "price": "/price"
+  },
+  "node_identity": {
+    "did": "did:key:z6Mk...",
+    "public_key": "z6Mk..."
   }
 }
 ```
@@ -320,6 +324,32 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
 - Path templates use OpenAPI-style `{param}` (not `:param`).
 
 A machine-readable **OpenAPI 3.1** description of the full protocol is available at `docs/didbox402-openapi.yaml`. Implementers are strongly encouraged to use it for client and server generation.
+
+### 7.2 Node Identity
+
+Starting with protocol version 0.7.0, every compliant node **MUST** publish a node identity.
+
+- The identity **MUST** be expressed as a `did:key` (Ed25519 only).
+- Nodes **MUST** use a dedicated Ed25519 keypair for signing protocol artifacts (such as Migration Authorizations). This signing key **SHOULD** be kept separate from any administrative or operational keys.
+- The `node_identity` object **MUST** be included in the `/.well-known/didbox-configuration` response.
+
+**Node Identity Object:**
+
+```json
+{
+  "did": "did:key:z6Mk...",
+  "public_key": "z6Mk..."
+}
+```
+
+- `did`: The node's Decentralized Identifier in `did:key` format.
+- `public_key`: The base58btc multibase encoding of the raw 32-byte Ed25519 public key (same encoding used in the DID).
+
+**Key Management:**
+- The signing key must be protected with equivalent security to payment provider secrets.
+- Key rotation is permitted by publishing a new `node_identity`. Previously issued Migration Authorizations remain valid until their natural expiry.
+
+This identity enables third-party verification of protocol artifacts signed by the node.
 
 ---
 

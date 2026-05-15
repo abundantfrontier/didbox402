@@ -5,10 +5,14 @@ compatibility_flags = [ "nodejs_compat" ]
 
 [vars]
 # IMPORTANT (spec 10.2): Change this to a high-entropy secret (≥128 bits) before production.
-# Never commit real salts to git. Use `wrangler secret` or environment variables in production.
 SERVICE_SALT = "test_salt"
 BASE_RATE_PER_MB_HOUR = "100"
 INBOX_CREATION_FEE = "1000"
+
+# v0.7.0+ Node Identity (REQUIRED in non-dev environments)
+# The server will fail to operate correctly if these are missing when DEV_MODE != "true".
+# NODE_SIGNING_PRIVATE_KEY = "64 hex characters (32 bytes Ed25519 private key)"
+# NODE_DID = "did:key:z6Mk..."  # Must correspond to the private key above
 
 [[r2_buckets]]
 binding = "STORAGE_BUCKET"

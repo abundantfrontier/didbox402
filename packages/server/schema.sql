@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS storage_records (
   owner_hash TEXT NOT NULL,
   recipient_hash TEXT,
   size_bytes INTEGER NOT NULL,
+  ciphertext_hash TEXT,           -- Added in v0.7.0 for Sovereign Mobility (Phase 1+)
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );

@@ -61,11 +61,11 @@ components:
 
     DiscoveryResponse:
       type: object
-      required: [protocol_version, supported_rails, limits, endpoints]
+      required: [protocol_version, supported_rails, limits, endpoints, node_identity]
       properties:
         protocol_version:
           type: string
-          example: "0.6.2"
+          example: "0.7.0"
         supported_rails:
           type: array
           items:
@@ -83,6 +83,17 @@ components:
               default: 1
         endpoints:
           type: object
+        node_identity:
+          type: object
+          required: [did, public_key]
+          properties:
+            did:
+              type: string
+              example: "did:key:z6Mk..."
+            public_key:
+              type: string
+              example: "z6Mk..."
+              description: Base58btc multibase encoding of the Ed25519 public key (can be derived from the did:key)
 
     PriceResponse:
       type: object
@@ -380,6 +391,85 @@ paths:
           description: Purge completed
         '403':
           description: Unauthorized
+
+  /migrate/{storageId}/authorize:
+    post:
+      tags: [Storage]
+      summary: Request a Migration Authorization from the source node (v0.7.0+)
+      description: |
+        Returns a signed Migration Authorization proving ownership of a box and the remaining lease time.
+        This is the first step of the Sovereign Mobility (Phase 1) flow.
+        The authorization is generic — it is not tied to a specific destination node.
+      parameters:
+        - name: storageId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      responses:
+        '200':
+          description: Migration Authorization successfully issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationAuthorization'
+        '403':
+          description: Authenticated DID is not the owner of the storage box
+        '410':
+          description: Lease has already expired
+
+components:
+  schemas:
+    MigrationAuthorization:
+      type: object
+      required:
+        - version
+        - original_storage_id
+        - owner_did
+        - size_bytes
+        - ciphertext_hash
+        - remaining_lease_hours
+        - issued_at
+        - expires_at
+        - signature
+      properties:
+        version:
+          type: integer
+          example: 1
+        original_storage_id:
+          type: string
+          format: uuid
+        owner_did:
+          type: string
+          example: "did:key:z6Mk..."
+        size_bytes:
+          type: integer
+        ciphertext_hash:
+          type: string
+          description: "sha256:0x..."
+        remaining_lease_hours:
+          type: integer
+        issued_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        source_node:
+          type: string
+          nullable: true
+          description: URL of the source node (optional for privacy)
+        issuance_nonce:
+          type: string
+          nullable: true
+          description: Unique nonce for this authorization (recommended for replay protection)
+        signature:
+          type: string
+          description: Hex-encoded Ed25519 signature over the JCS-canonicalized object (excluding the signature field) using the node's signing key.
 
 security:
   - DIDAuth: []
