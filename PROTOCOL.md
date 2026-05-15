@@ -135,7 +135,7 @@ finalCost = ceil(cost)
 
 - `min_charge_mb = 1` (hard floor) is **mandatory** for all storage operations.
 - `durationHours` MUST be a positive integer ≥ 1.
-- `egress_rate_per_mb` (default 0) is charged on successful `GET /retrieve` only when the configured value > 0.
+- `egress_rate_per_mb` (default 0) **MAY** be charged on successful `GET /retrieve/{id}`. When the configured rate > 0, servers SHOULD return 402 before delivering large payloads (using the same pricing formula). Providers MAY choose to absorb egress costs (rate = 0) as a competitive or marketing decision.
 - The values returned by `GET /price` **MUST** be used to compute the 402 challenge amount for `/store`, `/extend/{id}`, and `/inboxes`.
 
 ---
@@ -319,6 +319,8 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
 - Clients MUST ignore unknown fields.
 - Path templates use OpenAPI-style `{param}` (not `:param`).
 
+A machine-readable **OpenAPI 3.1** description of the full protocol is available at `docs/didbox402-openapi.yaml`. Implementers are strongly encouraged to use it for client and server generation.
+
 ---
 
 ## 8. Versioning & Compatibility
@@ -367,9 +369,9 @@ The conformance suite **MUST** exercise real Ed25519 signatures (via `@didbox/sd
 **Reference:** The authoritative test cases live in `packages/server/src/__tests__/` and are progressively being ported into the published `@didbox/conformance` package. Implementers should run both the published CLI and the reference server test suite against their node.
 
 ### 10.2 Security Requirements
-Implementations SHOULD align with the threat model in `docs/threat-model.html`. In particular:
+Implementations **MUST** align with the threat model documented in `docs/threat-model.html` (normative reference). In particular:
 
-- `SERVICE_SALT` MUST be a high-entropy secret (≥128 bits). It MUST NOT use the default values `"test_salt"` or `"default_salt"` in production and MUST NOT be committed to source control.
+- `SERVICE_SALT` MUST be a high-entropy secret (≥128 bits, cryptographically random). It MUST NOT use the default values `"test_salt"` or `"default_salt"` in production. Nodes SHOULD refuse to start or log a loud warning if `SERVICE_SALT` matches a well-known default in non-DEV_MODE. The salt MUST NOT be committed to source control.
 - Raw `recipientDid` values received in `POST /store` bodies MUST NOT be logged or persisted beyond the immediate hash computation.
 - The janitor/admin purge mechanism (if exposed via HTTP) MUST be protected by a strong secret or DID-based ACL.
 

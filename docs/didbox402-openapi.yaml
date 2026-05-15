@@ -1,0 +1,387 @@
+openapi: 3.1.0
+info:
+  title: didbox402 Protocol API
+  version: 0.6.2
+  description: |
+    Agent-native open protocol for ephemeral, paid, and verifiable storage.
+    All requests (except discovery) MUST be authenticated using DID signatures with temporal binding.
+  license:
+    name: MIT
+    url: https://github.com/didbox/didbox402/blob/main/LICENSE
+
+servers:
+  - url: https://your-node.example.com
+    description: Production didbox402 node
+
+tags:
+  - name: Discovery
+  - name: Storage
+  - name: Inboxes
+  - name: Economics
+  - name: Administration
+
+components:
+  securitySchemes:
+    DIDAuth:
+      type: apiKey
+      in: header
+      name: X-DID
+      description: "The caller's did:key (z6Mk...)"
+    DIDSignature:
+      type: apiKey
+      in: header
+      name: X-DID-Signature
+      description: "Hex-encoded Ed25519 signature over the request binding (see spec 3.2)"
+    DIDTimestamp:
+      type: apiKey
+      in: header
+      name: X-DID-Timestamp
+      description: "Unix epoch milliseconds (UTC)"
+
+  parameters:
+    XInboxAlias:
+      name: X-Inbox-Alias
+      in: header
+      required: false
+      schema:
+        type: string
+        default: default
+      description: "Inbox alias for recipient-scoped retrieval (required for non-owners of scoped inboxes)"
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          nullable: true
+
+    DiscoveryResponse:
+      type: object
+      required: [protocol_version, supported_rails, limits, endpoints]
+      properties:
+        protocol_version:
+          type: string
+          example: "0.6.2"
+        supported_rails:
+          type: array
+          items:
+            type: string
+            enum: [L402, x402]
+        limits:
+          type: object
+          properties:
+            max_payload_bytes:
+              type: integer
+            max_lease_hours:
+              type: integer
+            min_charge_mb:
+              type: integer
+              default: 1
+        endpoints:
+          type: object
+
+    PriceResponse:
+      type: object
+      properties:
+        base_rate_per_mb_hour:
+          type: integer
+        inbox_creation_fee:
+          type: integer
+        egress_rate_per_mb:
+          type: integer
+        min_charge_mb:
+          type: integer
+
+    StoreRequest:
+      type: object
+      required: [ciphertext, durationHours, recipientDid]
+      properties:
+        ciphertext:
+          type: string
+          description: base64-encoded client-encrypted bytes
+        durationHours:
+          type: integer
+          minimum: 1
+        recipientDid:
+          type: string
+        inboxAlias:
+          type: string
+          default: default
+
+    StoreResponse:
+      type: object
+      properties:
+        storageId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        sizeBytes:
+          type: integer
+        pricePaidSatoshis:
+          type: integer
+
+    PaymentRequired:
+      type: object
+      properties:
+        error:
+          type: string
+        amount_satoshis:
+          type: integer
+        protocols:
+          type: object
+          properties:
+            L402:
+              type: object
+              properties:
+                invoice:
+                  type: string
+                macaroon:
+                  type: string
+            x402:
+              type: object
+              properties:
+                requirements:
+                  $ref: '#/components/schemas/X402Requirement'
+
+    X402Requirement:
+      type: object
+      properties:
+        amount:
+          type: string
+          description: USDC amount with 6 decimals
+        currency:
+          type: string
+          enum: [USDC]
+        network:
+          type: string
+          enum: [base, solana]
+        address:
+          type: string
+        context:
+          type: string
+
+security:
+  - DIDAuth: []
+  - DIDSignature: []
+  - DIDTimestamp: []
+
+paths:
+  /.well-known/didbox-configuration:
+    get:
+      tags: [Discovery]
+      summary: Capability discovery
+      description: Public endpoint. No authentication required.
+      security: []   # intentionally public
+      responses:
+        '200':
+          description: Node capabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryResponse'
+
+  /price:
+    get:
+      tags: [Economics]
+      summary: Current pricing
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      responses:
+        '200':
+          description: Current rates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceResponse'
+        '401':
+          description: Authentication failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /store:
+    post:
+      tags: [Storage]
+      summary: Create a new storage lease
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreRequest'
+      responses:
+        '200':
+          description: Lease created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '402':
+          description: Payment required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRequired'
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /retrieve/{id}:
+    get:
+      tags: [Storage]
+      summary: Retrieve stored ciphertext
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/XInboxAlias'
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      responses:
+        '200':
+          description: Ciphertext
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ciphertext:
+                    type: string
+        '410':
+          description: Lease expired
+        '403':
+          description: Unauthorized
+
+  /extend/{id}:
+    post:
+      tags: [Storage]
+      summary: Extend an existing lease
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                additionalHours:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Lease extended
+        '402':
+          description: Payment required
+
+  /leases:
+    get:
+      tags: [Storage]
+      summary: List leases owned by the authenticated DID
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      responses:
+        '200':
+          description: List of leases
+
+  /inbox/{alias}:
+    get:
+      tags: [Inboxes]
+      summary: List items in a specific inbox for the authenticated recipient DID
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      responses:
+        '200':
+          description: Inbox contents
+
+  /inboxes:
+    get:
+      tags: [Inboxes]
+      summary: List all inboxes created by the authenticated DID
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      responses:
+        '200':
+          description: List of owned inboxes
+
+    post:
+      tags: [Inboxes]
+      summary: Provision a new named inbox (one-time fee)
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alias:
+                  type: string
+      responses:
+        '200':
+          description: Inbox created
+        '402':
+          description: Payment required for inbox creation fee
+
+  /janitor/purge:
+    get:
+      tags: [Administration]
+      summary: Manually trigger purge of expired leases (admin only)
+      description: Not part of the public protocol. Protected by X-Admin-Token or DEV_MODE.
+      security:
+        - DIDAuth: []
+        - DIDSignature: []
+        - DIDTimestamp: []
+      responses:
+        '200':
+          description: Purge completed
+        '403':
+          description: Unauthorized
+
+security:
+  - DIDAuth: []
+  - DIDSignature: []
+  - DIDTimestamp: []

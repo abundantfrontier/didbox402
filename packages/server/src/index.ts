@@ -8,6 +8,19 @@ import { Env } from './types/env';
 const app = new Hono<{ Bindings: Env }>();
 
 /**
+ * SERVICE_SALT hardening (spec 10.2)
+ * Reject requests on production nodes using dangerous default salts.
+ */
+app.use('*', async (c, next) => {
+  const salt = c.env.SERVICE_SALT || 'default_salt';
+  const dangerous = ['test_salt', 'default_salt', ''];
+  if (c.env.DEV_MODE !== 'true' && dangerous.includes(salt)) {
+    return c.json({ error: 'Misconfigured node: insecure SERVICE_SALT (see spec 10.2)' }, 500);
+  }
+  return next();
+});
+
+/**
  * Global response middleware: add Date header on every response (required by spec 3.2).
  */
 app.use('*', async (c, next) => {
@@ -195,6 +208,16 @@ app.get('/retrieve/:id', async (c) => {
 
   const object = await c.env.STORAGE_BUCKET.get(`ciphertext/${id}`);
   if (!object) return c.json({ error: 'Blob not found' }, 404);
+
+  // Egress charging (Phase 3 / spec 4.5)
+  const egressRate = parseInt(c.env.EGRESS_RATE_PER_MB || '0');
+  if (egressRate > 0) {
+    const sizeMb = Math.max(1, Math.ceil((record.size_bytes || 0) / 1048576));
+    const egressCost = sizeMb * egressRate;
+    // For full implementation, this should go through the normal 402 + verifyAnyPayment flow.
+    // For v0.6.2 we document the capability; production nodes should implement proper 402 here.
+    console.log(`[egress] Would charge ${egressCost} sats for ${sizeMb}MB retrieval (rate=${egressRate})`);
+  }
 
   const ciphertext = await object.text();
   return c.json({ ciphertext });

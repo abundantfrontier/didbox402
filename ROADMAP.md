@@ -9,11 +9,12 @@ This roadmap outlines the planned evolution of the **didbox402** protocol and re
 - [x] Formal Protocol Specification (v0.6.0)
 - [x] Standalone Conformance Suite
 - [x] Implementer's Guide & Practical Examples
-- [ ] Community & Contribution Infrastructure (v0.6.1)
-- [ ] Final Documentation & Messaging Polish (v0.6.1)
+- [x] v0.6.2 Security & Interoperability Hardening (replay protection, OpenAPI, SERVICE_SALT rules, discovery alignment)
+- [ ] Community & Contribution Infrastructure (v0.6.2+)
+- [ ] Final Documentation & Messaging Polish (v0.6.2)
 
-## Next Milestone: v0.7.0 (Sovereign Mobility)
-**Goal:** Enable agents to migrate effortlessly between nodes and providers.
+## Next Milestone: v0.7.0 (Sovereign Mobility + Production Polish)
+**Goal:** Enable agents to migrate effortlessly between nodes and providers. Phase 3 items from v0.6.2 (OpenAPI, full real payment rails, egress charging, advanced threat coverage) feed into this release.
 
 ### Focus Areas:
 1.  **Identity Portability:** Documented migration paths for DID-based storage boxes.
