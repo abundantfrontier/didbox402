@@ -284,6 +284,38 @@ NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
             </table>
         </section>
 
+        <section id="commercial-operators">
+            <h2>11. Guidance for Commercial & Fleet Operators (v0.7.0+)</h2>
+
+            <h3>Partial Rail Support</h3>
+            <p>Commercial nodes may advertise only a subset of rails (e.g., <code>["x402"]</code>). This is fully compliant. Ensure your discovery response and conformance testing scope reflect only the rails you actually support.</p>
+
+            <h3>Node Identity for Multi-Node Fleets</h3>
+            <p>For high-availability or multi-region deployments, you have two compliant options:</p>
+            <ul>
+                <li><strong>Shared signing key:</strong> Use the same Ed25519 key across all nodes in your fleet. This allows any node to issue verifiable Migration Proofs for leases stored anywhere in the fleet.</li>
+                <li><strong>Per-node keys:</strong> Each node uses its own identity. Clients will rely on the <code>source_node</code> field in Migration Proofs.</li>
+            </ul>
+            <p>Shared keys are often simpler for Phase 1 Sovereign Mobility.</p>
+
+            <h3>SERVICE_SALT Considerations</h3>
+            <p>The <code>SERVICE_SALT</code> is effectively immutable. Rotating it will break all existing inbox and lease lookups. Treat it as a long-lived secret with the same protection level as your node signing key. Future protocol versions may introduce rotation support.</p>
+
+            <h3>Admin / Operational Endpoints</h3>
+            <p>It is acceptable (and recommended for production) to expose strongly authenticated admin endpoints (e.g., <code>POST /admin/purge</code> protected by DID ACL or a strong shared secret) for emergency or on-demand operations. These endpoints are outside the public protocol.</p>
+
+            <h3>Pricing Flexibility</h3>
+            <p>You may implement per-DID or tiered pricing. As long as the authenticated <code>GET /price</code> returns the rates that will be used for that specific caller, and those rates are used to compute the 402 challenge, the implementation remains compliant.</p>
+
+            <h3>x402 (Base USDC) Implementation Notes</h3>
+            <ul>
+                <li>Use the official Base USDC contract: <code>0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913</code> (mainnet)</li>
+                <li>For testnet, use the Base Sepolia USDC contract.</li>
+                <li>Require at least 1 confirmation for production.</li>
+                <li>Store used <code>txHash</code> values in <code>used_payments</code> with appropriate expiry.</li>
+            </ul>
+        </section>
+
         <section id="common-errors">
             <h2>Common Errors & How to Fix Them</h2>
             <table class="error-table">

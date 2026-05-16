@@ -74,9 +74,12 @@ Every signature MUST be unique and temporally bound.
 didbox402 nodes MUST enforce resource allocation via the **402 Payment Required** status code.
 
 ### 4.1 Payment Rails
-A node SHOULD support both:
+A node **MUST** support at least one payment rail and **SHOULD** support both:
+
 - **L402 (Lightning Network):** Satoshis with Macaroon-based authentication.
 - **x402 (Web3/Stablecoin):** USDC stablecoin settlement (e.g., Base chain).
+
+**Partial Rail Support:** A node MAY advertise support for only a subset of rails (e.g., `["x402"]` only) in its discovery response. Such nodes remain fully compliant provided they correctly implement the rails they advertise. Clients MUST only use rails that the node has advertised as supported. Conformance testing SHOULD be limited to the rails declared in `supported_rails`.
 
 ### 4.2 Standardized Challenges
 Nodes MUST respond to unpaid requests with `402 Payment Required` and the following headers:
@@ -136,14 +139,17 @@ finalCost = ceil(cost)
 - `min_charge_mb = 1` (hard floor) is **mandatory** for all storage operations.
 - `durationHours` MUST be a positive integer ≥ 1.
 - `egress_rate_per_mb` (default 0) **MAY** be charged on successful `GET /retrieve/{id}`. When the configured rate > 0, servers SHOULD return 402 before delivering large payloads (using the same pricing formula). Providers MAY choose to absorb egress costs (rate = 0) as a competitive or marketing decision.
-- The values returned by `GET /price` **MUST** be used to compute the 402 challenge amount for `/store`, `/extend/{id}`, and `/inboxes`.
+- The values returned by the authenticated `GET /price` **MUST** be used to compute the 402 challenge amount for that specific request.
+- A node **MAY** return different pricing based on the authenticated DID (e.g., volume discounts, partner tiers, or subscription plans). If differentiated pricing is used, the node MUST return the applicable rates in the authenticated `/price` response, and those returned values MUST be used for the subsequent paid operation.
 
 ---
 
 ## 5. API Specification
 
 ### 5.1 Error Codes
-Compliant nodes MUST use the following standardized error codes:
+Compliant nodes MUST use the following standardized error codes for the core conditions listed below. Nodes **MAY** return additional custom short codes (e.g., `"RATE_LIMITED"`, `"STORAGE_BACKEND_DEGRADED"`, `"MAINTENANCE_MODE"`, `"QUOTA_EXCEEDED"`) for operational conditions. Clients **MUST** treat unknown `code` values gracefully.
+
+**Core Normative Error Codes:**
 - `400 Bad Request`: Malformed request body, invalid `durationHours`, or other validation errors.
 - `401 Unauthorized`: Missing or invalid DID signature/timestamp.
 - `402 Payment Required`: Missing or invalid payment proof.
@@ -261,7 +267,8 @@ Lists all named inboxes provisioned by the authenticated DID (no payment require
 ```
 
 **Inbox Alias Rules:**
-- `POST /store` accepts any `inboxAlias` string (including previously unused values). Provisioning via `POST /inboxes` is **optional** for receiving; it is primarily an owner-side management and fee mechanism.
+- `POST /store` accepts any `inboxAlias` string (including previously unused values). Storing to a previously unseen alias **implicitly creates** the inbox (no `inbox_creation_fee` is charged at store time).
+- `POST /inboxes` is **optional** and is primarily used when an operator wants to charge the `inbox_creation_fee` upfront or explicitly provision named inboxes.
 - `GET /inbox/{alias}` and `GET /retrieve/{id}` with `X-Inbox-Alias` work for any alias that was used at store time.
 - The `default` inbox always exists implicitly.
 
@@ -368,7 +375,7 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
 ```json
 {
   "protocol_version": "0.7.0",
-  "supported_rails": ["L402", "x402"],
+  "supported_rails": ["L402", "x402"],   // MAY be a subset (e.g. ["x402"])
   "limits": {
     "max_payload_bytes": 10485760,
     "max_lease_hours": 8760,
@@ -406,6 +413,7 @@ Starting with protocol version 0.7.0, every compliant node **MUST** publish a no
 
 - The identity **MUST** be expressed as a `did:key` (Ed25519 only).
 - Nodes **MUST** use a dedicated Ed25519 keypair for signing protocol artifacts (such as Migration Authorizations). This signing key **SHOULD** be kept separate from any administrative or operational keys.
+- **Fleet / Multi-Node Deployments:** Operators running multiple nodes (HA, multi-region, load-balanced) **MAY** use the same Ed25519 signing key across all nodes in a fleet. This allows any node to issue verifiable Migration Proofs for leases that originated on other nodes in the same fleet. Alternatively, operators MAY use per-node keys; in this case clients are responsible for tracking the `source_node` field in Migration Proofs.
 - The `node_identity` object **MUST** be included in the `/.well-known/didbox-configuration` response.
 
 **Node Identity Object:**
@@ -477,6 +485,7 @@ The conformance suite **MUST** exercise real Ed25519 signatures (via `@didbox/sd
 Implementations **MUST** align with the threat model documented in `docs/threat-model.html` (normative reference). In particular:
 
 - `SERVICE_SALT` MUST be a high-entropy secret (≥128 bits, cryptographically random). It MUST NOT use the default values `"test_salt"` or `"default_salt"` in production. Nodes SHOULD refuse to start or log a loud warning if `SERVICE_SALT` matches a well-known default in non-DEV_MODE. The salt MUST NOT be committed to source control.
+- **Rotation:** `SERVICE_SALT` is considered effectively immutable for the lifetime of a service. Rotating it would invalidate all existing `owner_hash` and `recipient_hash` values, breaking historical inboxes and lease queries. There is currently no supported rotation mechanism. Operators SHOULD treat the salt as a long-lived secret. Future versions of the protocol may introduce versioning or migration support for salt rotation.
 - Raw `recipientDid` values received in `POST /store` bodies MUST NOT be logged or persisted beyond the immediate hash computation.
 - The janitor/admin purge mechanism (if exposed via HTTP) MUST be protected by a strong secret or DID-based ACL.
 

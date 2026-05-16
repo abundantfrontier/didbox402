@@ -93,6 +93,20 @@ Many powerful features for autonomous agents — such as automatic lease renewal
 - Create optional protocol extensions for common agent patterns
 - Encourage advanced features to live primarily in SDKs and commercial implementations
 
+---
+
+## Commercial Operator Feedback (v0.7.0)
+
+Feedback from early commercial implementers (e.g., didboxpro) has highlighted several areas that need better guidance for production multi-node deployments:
+
+- **Node Identity in Fleets**: How should signing keys be managed across HA / multi-region nodes for Migration Proofs?
+- **SERVICE_SALT Rotation**: Currently treated as immutable. A future mechanism for safe rotation without breaking historical inboxes would be valuable.
+- **Admin / Operational Surfaces**: Clearer guidance on authenticated admin endpoints (purge, maintenance mode, etc.).
+- **Conformance for Commercial Products**: Interest in a lightweight certification or “verified provider” listing once nodes pass conformance.
+- **Phase 2 Sovereign Mobility**: Early visibility into when destination nodes will begin validating and acting on Migration Authorizations.
+
+These topics are tracked for future design work. Commercial operator input is highly valued.
+
 ## Service Extensibility (Tiered Storage & Compute)
 
 **How can the protocol support different classes of storage or deterministic compute services without breaking backward compatibility?**
