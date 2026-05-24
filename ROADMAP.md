@@ -44,6 +44,7 @@ For a detailed exploration of strategic questions and potential directions, see 
 - **Registry & Discovery:** Decentralized discovery of didbox402 nodes and their configurations.
 - **Advanced Privacy:** Integration of Zero-Knowledge Proofs (ZKPs) for truly anonymous storage retrieval.
 - **Global Liquidity:** Unified payment settlement across hundreds of niche and mainstream financial rails.
+- **Group Communication:** Client-side patterns and potential future protocol support for secure multi-party / group state while maintaining cryptographic sovereignty (see `docs/designs/group-communication-design.md`).
 
 ---
 *Note: This roadmap is a living document. Features and priorities may shift based on community feedback and the evolution of the autonomous agent ecosystem.*

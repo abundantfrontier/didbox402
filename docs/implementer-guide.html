@@ -214,6 +214,36 @@ const proof = await sourceClient.getMigrationProof(storageId);</code></pre>
             </ul>
         </section>
 
+        <section id="client-sdk-guidance">
+            <h2>Client SDK Guidance and Recommendations</h2>
+
+            <p>didbox402 is intentionally a <strong>client-heavy protocol</strong>. The server is deliberately kept simple and stateless so that providers remain commodity infrastructure. Most intelligence, resilience, and ergonomics therefore live in client libraries and SDKs.</p>
+
+            <p>The normative (mandatory) client behaviors are defined in PROTOCOL.md §9.1. The following section describes what high-quality client SDKs <strong>SHOULD</strong> provide on top of the core protocol. These recommendations are not required for basic protocol compliance, but they are necessary for a usable agent and developer experience.</p>
+
+            <h3>Recommended High-Level Abstractions</h3>
+            <ul>
+                <li><strong>Automatic payment handling</strong> — A <code>DidBoxClient</code> (or equivalent) that can detect 402 responses, negotiate payment via pluggable L402/x402 providers, and transparently retry the original request.</li>
+                <li><strong>Migration orchestration</strong> — Helpers such as <code>getMigrationProof()</code>, <code>migrate()</code>, and <code>DidBoxClient.forNode()</code> that make Sovereign Mobility straightforward for clients.</li>
+                <li><strong>Lease lifecycle support</strong> — Cost estimation using <code>/price</code>, expiry monitoring, and assisted lease extension.</li>
+                <li><strong>Resilience patterns</strong> — Built-in support for client-side mirroring of important conversations/threads into per-DID archive inboxes, plus reconciliation helpers (see the Deletion Semantics design document).</li>
+                <li><strong>Group communication helpers</strong> — Ergonomic APIs for the per-DID signing + shared symmetric encryption pattern without forcing application code to manage the details.</li>
+                <li><strong>Paid content distribution support</strong> — Helpers for creators and platforms using the off-protocol payment model (see the Paid Content Distribution design pattern), including lease management, key handling coordination, and private delivery flows.</li>
+                <li><strong>Discovery and configuration</strong> — Automatic fetching and caching of <code>/.well-known/didbox-configuration</code>, with exposure of supported rails, limits, and node identity.</li>
+                <li><strong>Clock and error recovery</strong> — Automatic use of server <code>Date</code> headers for drift correction and clear error types for common failure modes (drift, replay, payment required, etc.).</li>
+            </ul>
+
+            <h3>Reference Packages</h3>
+            <p>The official packages aim to implement the above:</p>
+            <ul>
+                <li><code>@didbox/sdk-crypto</code> — Low-level Ed25519 signing, request binding, migration proof verification.</li>
+                <li><code>@didbox/sdk-payments</code> — Rail negotiation and proof handling.</li>
+                <li><code>@didbox/sdk-core</code> — High-level <code>DidBoxClient</code> that combines the above with convenient methods.</li>
+            </ul>
+
+            <p>Application authors and agent frameworks are strongly encouraged to build on these packages rather than re-implementing protocol details.</p>
+        </section>
+
         <section id="server-migration">
             <h2>10. Server Implementation Requirements (v0.7.0+)</h2>
             
@@ -313,6 +343,58 @@ NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
                 <li>For testnet, use the Base Sepolia USDC contract.</li>
                 <li>Require at least 1 confirmation for production.</li>
                 <li>Store used <code>txHash</code> values in <code>used_payments</code> with appropriate expiry.</li>
+            </ul>
+
+            <h3>Group Communication (Exploratory / Future Direction)</h3>
+            <p><strong>Note:</strong> This is an exploratory client-side pattern, intended for post-v0.7.0 use cases. It does not require any server-side changes.</p>
+            <p>For secure group chat or shared workspaces across multiple DIDs while keeping the server blind, see the design document:</p>
+            <p><a href="designs/group-communication-design.md">Group Communication Design on didbox402</a></p>
+            <p>This approach uses individual DIDs for signing (provenance) + a shared symmetric group key for encryption. No server-side changes are required.</p>
+
+            <h3>Client-Side Resilience Patterns (Deletion and Expiry)</h3>
+            <p>Because the protocol treats deletion as a best-effort operational obligation rather than a cryptographically provable event, clients are responsible for managing resilience against lease expiry or provider non-compliance. A recommended pattern is client-side mirroring of important threads or conversations into per-DID archive inboxes. This is documented in:</p>
+            <p><a href="designs/deletion-semantics-client-resilience.md">Deletion Semantics, Attestations, and Client-Side Resilience</a></p>
+            <p>This pattern requires no changes to the server or protocol and is especially relevant for group communication and long-lived agent handoffs.</p>
+
+            <h3>Paid Content Distribution (Off-Protocol Payments)</h3>
+            <p>Many legitimate commercial use cases involve creators or publishers monetizing digital content while preserving privacy for both buyer and seller. The recommended approach keeps the actual payment outside of didbox402 (direct between the parties) and uses the protocol only for private delivery of the encrypted content. This model avoids turning storage nodes into financial intermediaries and aligns with the protocol’s core privacy principles.</p>
+            <p>For details and recommended patterns, see:</p>
+            <p><a href="designs/paid-content-distribution-pattern.md">Privacy-Preserving Paid Content Distribution</a></p>
+            <p>Example use cases include independent journalism and research, professional knowledge products, research datasets, and creative assets.</p>
+
+            <h3>Background Purge and Janitor Strategies at Scale</h3>
+            <p>The reference implementation exposes <code>GET /janitor/purge</code> (protected by <code>X-Admin-Token</code>) as a simple manual trigger. It processes expired records in small batches (default 50) and also cleans old nonces.</p>
+            <p>For production deployments handling thousands or millions of leases, you should move to automated background purging. Recommended approaches include:</p>
+            <ul>
+                <li><strong>Cloudflare Durable Object alarms</strong> (per-shard or per-tenant) for scheduled, rate-limited purge runs directly in the Worker environment.</li>
+                <li><strong>Cloudflare Workflows or Cron Triggers</strong> for centralized scheduling with backpressure and observability.</li>
+                <li><strong>External scheduler</strong> (e.g., a small worker or GitHub Action + Wrangler) that calls your admin purge endpoint on a schedule.</li>
+                <li><strong>Incremental + bounded deletes</strong> — always use <code>LIMIT</code> and process in small batches to avoid long-running transactions or D1 timeouts.</li>
+            </ul>
+            <p>Whichever mechanism you choose, ensure it runs at least hourly (finer granularity is better for very short leases) and is observable (logs, metrics on purged count and duration).</p>
+
+            <h3>Replay Protection Store Lifecycle (used_payments and nonces)</h3>
+            <p>Both <code>nonces</code> (DID signature replay) and <code>used_payments</code> (L402/x402 payment proof replay) tables must be cleaned to prevent unbounded growth.</p>
+            <ul>
+                <li><code>nonces</code> are short-lived (tied to the 5-minute drift window + small grace). The reference janitor already deletes them.</li>
+                <li><code>used_payments</code> rows live for the duration of the lease they paid for (plus a grace period). This can be up to <code>max_lease_hours</code> (8760 hours / 1 year) for long leases.</li>
+            </ul>
+            <p><strong>Operational considerations:</strong></p>
+            <ul>
+                <li>Under high churn (many 1-hour leases) you will accumulate many short-lived rows.</li>
+                <li>Under long leases you accumulate fewer rows but they stay for a very long time.</li>
+                <li>In any horizontally scaled fleet, the replay check must be strongly consistent across nodes that can serve the same request.</li>
+                <li>The current reference implementation inserts rows with an <code>expires_at</code> column and an index, but does <strong>not</strong> automatically delete old <code>used_payments</code> rows. You must add cleanup (e.g., <code>DELETE FROM used_payments WHERE expires_at &lt; ?</code>) to your janitor or a separate scheduled task.</li>
+            </ul>
+            <p>Monitor table size and cleanup lag in production. D1 has practical limits; very high-volume nodes may eventually need sharding or a separate ledger for payment proofs.</p>
+
+            <h3>Node Signing Key Management</h3>
+            <p>The Ed25519 key published in <code>node_identity</code> (used to sign Migration Authorizations) should be treated with high security — equivalent to a payment provider secret.</p>
+            <ul>
+                <li>Store it in an appropriate secret manager (not in source control or plain environment variables in production).</li>
+                <li>Rotation is allowed: publish a new <code>node_identity</code> in discovery. Previously issued proofs remain valid until their natural <code>expires_at</code>.</li>
+                <li>For fleets: sharing one key across nodes simplifies Migration Proof verification for clients. Using per-node keys is also compliant but requires clients to track <code>source_node</code>.</li>
+                <li>Never use the same key for both node identity / migration proofs and day-to-day admin operations if you can avoid it.</li>
             </ul>
         </section>
 

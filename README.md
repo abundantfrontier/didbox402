@@ -58,6 +58,8 @@ cd packages/server && npx wrangler dev
 - **[Sovereign Mobility Design](docs/designs/v070-sovereign-mobility-phase1.md)**: Client-driven migration (v0.7.0).
 - **[Client SDK Migration Design](docs/designs/v070-client-sdk-migration.md)**: `getMigrationProof()` and `migrate()` design.
 - **[Migration Implementation Plan](docs/designs/v070-client-sdk-migration-implementation-plan.md)**: Detailed execution record.
+- **[Group Communication Design](docs/designs/group-communication-design.md)**: Client-side pattern for secure group chat / shared state using individual DIDs + shared encryption keys (no server changes required).
+- **[Paid Content Distribution](docs/designs/paid-content-distribution-pattern.md)**: Off-protocol payments with private didbox402 delivery for independent journalism, research, and professional content.
 - **[Extension Points](docs/extensions.html)**: How to customize and commercialize.
 - **[Threat Model](docs/threat-model.html)**: Security considerations and mitigations.
 

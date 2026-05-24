@@ -2,6 +2,21 @@
 
 All notable changes to the **didbox402** protocol and reference implementation will be documented in this file.
 
+## [Unreleased]
+
+### Documentation & Guidance (Post v0.7.0)
+
+- Added new design document: **[Privacy-Preserving Paid Content Distribution](docs/designs/paid-content-distribution-pattern.md)** — Documents the recommended pattern of performing payments off-protocol (directly between buyer and seller) while using didbox402 only for private delivery of encrypted content. Includes legal, uplifting use cases focused on independent journalism & research, professional knowledge products, research datasets, and creative assets. Emphasizes alignment with core privacy and "ghost provider" principles.
+- Added significant operational guidance for production node operators in the [Implementer's Guide](docs/implementer-guide.html):
+  - Background purge / janitor strategies at scale (Durable Object alarms, Workflows, external schedulers, etc.)
+  - Replay protection store lifecycle management, with specific notes on `used_payments` table growth and the need for periodic cleanup
+  - Deeper node signing key management recommendations (rotation, fleet considerations, security posture)
+- Clarified the boundary between **normative client obligations** and **recommended client SDK capabilities** in [PROTOCOL.md §9](PROTOCOL.md) (split into 9.1 and 9.2) and the Implementer's Guide (new "Client SDK Guidance and Recommendations" section).
+- Added [Deletion Semantics, Attestations, and Client-Side Resilience](docs/designs/deletion-semantics-client-resilience.md) design document, including the conversation mirroring pattern for resilience against lease expiry.
+- Updated [Threat Model](docs/threat-model.html) with a new "Ephemerality and Deletion" category and cross-references to the new guidance.
+- Added references and navigation entries for the new design documents across [README.md](README.md), [docs/index.html](docs/index.html), and the Implementer's Guide.
+- Various small improvements to documentation structure and discoverability of client-side and commercial patterns (no protocol changes).
+
 ## [0.7.0] - 2026-05-15
 
 ### Sovereign Mobility (Phase 1)

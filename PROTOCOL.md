@@ -272,6 +272,8 @@ Lists all named inboxes provisioned by the authenticated DID (no payment require
 - `GET /inbox/{alias}` and `GET /retrieve/{id}` with `X-Inbox-Alias` work for any alias that was used at store time.
 - The `default` inbox always exists implicitly.
 
+**Group Communication Note:** Multiple DIDs can write to the same inbox alias. A common client-side pattern for secure group communication is for each participant to sign messages with their own DID while encrypting content with a shared group key. This pattern requires no protocol changes. See `docs/designs/group-communication-design.md` for details.
+
 **Note on Administrative Endpoints:**
 The reference implementation exposes `GET /janitor/purge` (protected by `X-Admin-Token` or `DEV_MODE`). This endpoint is **not** part of the public protocol and implementers may implement automatic purge via cron, Durable Object alarms, or other background mechanisms instead.
 
@@ -448,17 +450,36 @@ didbox402 follows semantic versioning for the protocol.
 
 ## 9. Client Requirements
 
-While most normative requirements are written for nodes, the following obligations apply to clients and SDKs:
+While most normative requirements in this document are written for nodes, certain behaviors are mandatory (or strongly recommended) for any client that interacts with the protocol. These are divided into two categories for clarity.
 
-- **Signature Construction:** Clients MUST compute the request hash exactly as defined in 3.2 (double SHA-256 with `bodyHashHex`) and sign the resulting bytes with Ed25519. The official `@didbox/sdk-crypto` package provides the reference `signRequest` implementation.
-- **Freshness:** Every request MUST use a fresh `X-DID-Timestamp` (within the 5-minute window) and a unique signature. Clients SHOULD never reuse a signature.
-- **402 Handling:** On receiving 402, clients SHOULD parse both `WWW-Authenticate` (L402) and `PAYMENT-REQUIRED` (x402) and support at least one advertised rail. After successful payment, the client retries the original request with the appropriate proof header (`Authorization: L402 ...` or `PAYMENT-SIGNATURE`).
-- **Inbox Alias Usage (as recipient):** When retrieving or listing items sent to a non-default `inboxAlias`, the client MUST supply the `X-Inbox-Alias` header (or use the alias in the URL path). Owners retrieving their own items may omit the header.
-- **Clock Synchronization:** Clients SHOULD maintain NTP-synchronized clocks. On 401 drift errors, clients SHOULD read the `Date` response header and adjust future timestamps.
-- **Discovery:** Clients SHOULD fetch `/.well-known/didbox-configuration` without auth headers and tolerate additional fields.
-- **Ciphertext:** Clients MUST base64-encode the encrypted payload before sending in `POST /store`.
+### 9.1 Normative Client Obligations
 
-Implementers using the high-level `DidBoxClient` from `@didbox/sdk-core` inherit most of these behaviors when a correct `signRequest` function is supplied.
+The following requirements apply to all clients and SDKs. Failure to implement them correctly will result in interoperability failures or security issues. Conformance testing for clients focuses on these behaviors.
+
+- **Signature Construction:** Clients MUST compute the request hash exactly as defined in §3.2 (double SHA-256 with `bodyHashHex`) and sign the resulting bytes with Ed25519. The reference implementation lives in `@didbox/sdk-crypto`.
+- **Freshness and Replay Protection:** Every request MUST use a fresh `X-DID-Timestamp` (within the 5-minute drift window) and a unique signature. Clients MUST NOT reuse signatures.
+- **Inbox Alias Handling (as recipient):** When retrieving or listing items sent to a non-default `inboxAlias`, the client MUST supply the `X-Inbox-Alias` header (or use the alias in the URL path). Owners retrieving their own items may omit the header.
+- **Ciphertext Encoding:** Clients MUST base64-encode the client-encrypted payload before sending in `POST /store`.
+
+### 9.2 Recommended Client SDK Capabilities
+
+The following are **not normative protocol requirements**. They represent strong recommendations for any high-quality client library or SDK that aims to provide a good developer and agent experience on top of the core protocol.
+
+Official and third-party SDKs **SHOULD** provide ergonomic abstractions for these areas so that application code (especially autonomous agents and LLM tool-calling environments) does not need to implement low-level ceremony for every operation:
+
+- Automatic 402 challenge handling and payment negotiation (with pluggable wallet / rail providers for L402 and x402), including retry after successful settlement.
+- High-level `DidBoxClient` (or equivalent) that encapsulates signing, discovery, and common operations.
+- Migration orchestration helpers (`getMigrationProof`, `migrate`, `DidBoxClient.forNode` for cross-node operations).
+- Lease lifecycle management (monitoring expiry, automatic or assisted extension, cost estimation using `/price`).
+- Client-side resilience patterns, including conversation/thread mirroring into per-DID archives and reconciliation helpers (see the design document on Deletion Semantics and Client-Side Resilience).
+- Group communication conveniences (helpers for the per-DID signing + shared symmetric key pattern) without requiring server changes.
+- Clock drift detection and recovery using server `Date` headers.
+- Safe key management utilities and DID handling (while keeping all private key material client-side).
+- Discovery client that fetches and caches `/.well-known/didbox-configuration` and surfaces supported rails and limits.
+
+The reference packages (`@didbox/sdk-core`, `@didbox/sdk-crypto`, `@didbox/sdk-payments`) aim to implement the above recommendations. Application developers and agent frameworks are encouraged to build on these rather than re-implementing the low-level protocol details.
+
+Implementers using the high-level `DidBoxClient` from `@didbox/sdk-core` inherit most of the normative behaviors in 9.1 when a correct `signRequest` function is supplied.
 
 ---
 
@@ -506,6 +527,21 @@ Future phases may include:
 
 The original Phase 1 design document remains available at:
 → [docs/designs/v070-sovereign-mobility-phase1.md](/docs/designs/v070-sovereign-mobility-phase1.md)
+
+### 11.2 Group Communication (Exploratory)
+
+A client-side pattern for secure multi-party communication has been explored. It allows groups of DIDs to share encrypted state while preserving individual authorship through per-DID signatures and a shared symmetric encryption key.
+
+Key characteristics of this approach:
+- No changes required on the server
+- Sender pays for storage using the standard prepaid lease model
+- Full cryptographic sovereignty (server sees only ciphertext)
+- Provenance is maintained via individual DID signatures inside the encrypted blobs
+
+This is documented in:
+→ [Group Communication Design](docs/designs/group-communication-design.md)
+
+This remains an area for future protocol extensions or higher-level SDK support.
 
 ---
 **Version:** 0.7.0  

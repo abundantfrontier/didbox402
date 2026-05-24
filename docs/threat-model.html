@@ -99,6 +99,14 @@
             </div>
         </div>
 
+        <div class="threat-category">
+            <h3>Ephemerality and Deletion</h3>
+            <p><strong>Threat:</strong> A provider fails to purge expired leases or retains ciphertext beyond the agreed lease period.</p>
+            <div class="mitigation">
+                Mitigation: Deletion is a best-effort operational obligation on the provider (see PROTOCOL.md §1.2 and §10.2). Clients can reduce exposure through Sovereign Mobility and client-side redundancy patterns such as conversation mirroring. See the design document <a href="designs/deletion-semantics-client-resilience.md">Deletion Semantics, Attestations, and Client-Side Resilience</a> for details on remaining trust boundaries and practical mitigation approaches. No cryptographic proof of deletion is currently defined.
+            </div>
+        </div>
+
         <h2>3. Trust Assumptions</h2>
         <ul>
             <li><strong>Client Integrity:</strong> We assume the client handles their Ed25519 keys securely and never shares the plaintext.</li>

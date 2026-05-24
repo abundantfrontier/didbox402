@@ -104,6 +104,7 @@ Feedback from early commercial implementers (e.g., didboxpro) has highlighted se
 - **Admin / Operational Surfaces**: Clearer guidance on authenticated admin endpoints (purge, maintenance mode, etc.).
 - **Conformance for Commercial Products**: Interest in a lightweight certification or “verified provider” listing once nodes pass conformance.
 - **Phase 2 Sovereign Mobility**: Early visibility into when destination nodes will begin validating and acting on Migration Authorizations.
+- **Group Communication (Exploratory)**: A client-side pattern has been designed that allows groups to share encrypted state using individual DIDs for signing (provenance) and a shared symmetric key for confidentiality. The sender pays for storage. No server changes required. See the dedicated design document: `docs/designs/group-communication-design.md`. This is tracked as a post-v0.7.0 area of interest.
 
 These topics are tracked for future design work. Commercial operator input is highly valued.
 
