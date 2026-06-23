@@ -1,6 +1,8 @@
 # Future Directions & Open Questions
 
-This document captures strategic questions and potential directions for **didbox402** that go beyond the current scope of the protocol (as of v0.6.1). These topics are intended as areas for future exploration rather than committed roadmap items.
+This document captures strategic questions and potential directions for **didbox402** that go beyond the current scope of the protocol (as of v0.9.0). These topics are intended as areas for future exploration rather than committed roadmap items.
+
+**Last reviewed:** 2026-06-22
 
 ---
 
@@ -17,33 +19,11 @@ Any future evolution of the protocol MUST adhere to this principle of **Cryptogr
 
 ---
 
-## Sovereign Mobility
+## Cross-Node Movement (Client-Only)
 
-**What does cross-node movement of boxes look like while preserving “client owns the keys”?**
+As of **v0.8.0**, cross-node data movement is **client-only**: `GET /retrieve` on the source node, then `POST /store` on the destination. Server-signed migration artifacts were removed to preserve privacy and reduce complexity.
 
-One of the core principles of didbox402 is that **clients retain full control of their cryptographic keys**. This creates interesting challenges when considering the movement of stored data between independent nodes.
-
-A detailed design for the first phase of Sovereign Mobility has been developed:
-
-→ **[v0.7.0 Sovereign Mobility – Phase 1 (Minimal Migration) Design](docs/designs/v070-sovereign-mobility-phase1.md)**
-
-### Key Questions (from earlier exploration)
-- How can a box (or its lease) be transferred from one didbox node to another without the client having to re-upload the data?
-- What cryptographic or authorization mechanisms would allow a new node to verify ownership of an existing box?
-- Should box migration be a first-class protocol feature, or should it be handled entirely at the client or commercial layer?
-- How do we maintain privacy and unlinkability during and after a move?
-
-### Current Direction (v0.7.0 Phase 1)
-The current approach favors a **client-mediated model** with a signed **Migration Authorization** issued by the source node. Key characteristics:
-- Data movement remains client-side.
-- The Migration Authorization is generic and third-party verifiable.
-- Destination nodes are not required to understand migrations in Phase 1.
-- Strong emphasis on extensibility for future enhanced flows (e.g., lease matching when presenting the authorization to the destination node).
-
-### Considerations
-- Any migration mechanism must not require the client to reveal private keys to nodes.
-- There is value in time-limited, signed migration proofs.
-- Commercial providers may want different policies around data portability and migration incentives.
+Revisit server-side portability mechanisms only if implementors request them with a concrete privacy model. The withdrawn v0.7.0 design remains at [docs/designs/v070-sovereign-mobility-phase1.md](docs/designs/v070-sovereign-mobility-phase1.md) for historical reference.
 
 ---
 
@@ -99,11 +79,11 @@ Many powerful features for autonomous agents — such as automatic lease renewal
 
 Feedback from early commercial implementers (e.g., didboxpro) has highlighted several areas that need better guidance for production multi-node deployments:
 
-- **Node Identity in Fleets**: How should signing keys be managed across HA / multi-region nodes for Migration Proofs?
+- **Node Identity in Fleets**: Optional `node_identity` for operator reputation; no migration proof requirement in v0.8.0.
 - **SERVICE_SALT Rotation**: Currently treated as immutable. A future mechanism for safe rotation without breaking historical inboxes would be valuable.
 - **Admin / Operational Surfaces**: Clearer guidance on authenticated admin endpoints (purge, maintenance mode, etc.).
 - **Conformance for Commercial Products**: Interest in a lightweight certification or “verified provider” listing once nodes pass conformance.
-- **Phase 2 Sovereign Mobility**: Early visibility into when destination nodes will begin validating and acting on Migration Authorizations.
+- **Enterprise internal nodes (Phase 1 shipped in v0.9.0):** `billing_mode: entitlement` with `X-DIDBOX-Entitlement` API keys. See PROTOCOL.md §4.6.
 - **Group Communication (Exploratory)**: A client-side pattern has been designed that allows groups to share encrypted state using individual DIDs for signing (provenance) and a shared symmetric key for confidentiality. The sender pays for storage. No server changes required. See the dedicated design document: `docs/designs/group-communication-design.md`. This is tracked as a post-v0.7.0 area of interest.
 
 These topics are tracked for future design work. Commercial operator input is highly valued.
@@ -132,6 +112,36 @@ The protocol can facilitate paid, deterministic work (e.g., data transformation,
 - Standardizing a `service_type` registry in the protocol spec.
 - Defining a "Compute-as-a-Box" pattern where task status is tracked via standard storage metadata.
 - Exploring "Resource Negotiation" headers for real-time pricing of high-demand tiers.
+
+---
+
+## Enterprise Entitlement — Phase 2 (Future)
+
+Phase 1 (v0.9.0) delivers per-node `billing_mode`, API-key entitlement, and a separate conformance profile. The following are **not** in scope for Phase 1 but are natural extensions:
+
+### Signed Capability Tokens
+- Org admin holds an `entitlement_issuer` key (published in discovery).
+- Short-lived tokens encode `org`, `sub` (DID), allowed ops, and expiry — presented on `X-DIDBOX-Entitlement`.
+- Enables delegation without server-side DID registries.
+
+### DID Allowlists
+- Operator-maintained allowlist of agent DIDs; entitlement inferred after DID auth with no extra header.
+- Best for small, fixed agent fleets; poor fit for dynamic provisioning at scale.
+
+### Hybrid Single-Node Billing
+- One node accepts entitlement **or** 402 (e.g. employees vs external partners).
+- Server tries entitlement first, falls back to micropayment rails.
+- Requires `billing_mode: hybrid` and careful client semantics.
+
+### Quota & Usage Accounting
+- Even without monetary price, nodes need bytes-leased limits, rate limits, and per-org usage tables separate from `used_payments`.
+- Responses MAY include `code: "QUOTA_EXCEEDED"` when limits are hit.
+
+### Per-Storage-Class Entitlements
+- Tie entitlement scope to `storageClass` (when tiered storage lands) so memory/cache tiers can have distinct keys or quotas.
+
+### Ingress Integration (Non-Normative)
+- OIDC, mTLS, or service-mesh gateways MAY inject `X-DIDBOX-Entitlement` at the edge. The core protocol does not define OIDC flows.
 
 ---
 

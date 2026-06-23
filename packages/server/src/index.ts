@@ -1,198 +1,105 @@
 import { Hono } from 'hono';
-import { verifyDidSignature, hashDid, extractPublicKeyFromDid } from './middleware/did';
-import { calculateStoragePrice, calculateRetrievalPrice } from './lib/pricing';
+import { verifyDidSignature, hashDid } from './middleware/did';
+import { calculateStoragePrice, calculateEgressPrice } from './lib/pricing';
 import { saveStorageRecord, getStorageRecord, updateExpiration, getInboxRecords, saveInbox, getInboxes, getExpiredRecords, deleteStorageRecord, getOwnerRecords } from './lib/storage';
-import { verifyAnyPayment, issueDualChallenge } from './lib/payments';
+import { requireBilling, getBillingMode } from './lib/billing';
+import { hasConfiguredEntitlementKeys } from './lib/entitlement';
+import { storageBytesFromCiphertext, transferBytesFromRetrieveBody } from './lib/sizing';
+import { isVitestRuntime } from './lib/runtime';
+import { hexToBytes } from './lib/bytes';
 import { Env } from './types/env';
 import * as ed from '@noble/ed25519';
-import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import { sha512 } from '@noble/hashes/sha2.js';
 import bs58 from 'bs58';
-import canonicalize from 'canonicalize';
 
-// Setup for noble-ed25519
 ed.hashes.sha512 = (msg: Uint8Array) => sha512(msg);
 
-/**
- * Derive a did:key (z6Mk...) and public key from a 32-byte Ed25519 private key.
- * Used for Node Identity (v0.7.0+).
- */
-function deriveNodeIdentity(privateKeyHex: string) {
-  const privKey = Buffer.from(privateKeyHex, 'hex');
-  if (privKey.length !== 32) {
-    throw new Error('NODE_SIGNING_PRIVATE_KEY must be 64 hex characters (32 bytes)');
-  }
-
-  // We need the public key synchronously for startup
-  // noble-ed25519 getPublicKey is async in some versions, but we can use sync version if available
-  // For simplicity in Workers, we'll compute it at startup.
-  // Since we can't easily do async at top level, we'll compute it lazily in the handler
-  // and cache it.
-
-  return privKey;
-}
-
-/**
- * Node Identity (v0.7.0+)
- *
- * Operators must provide:
- *   - NODE_SIGNING_PRIVATE_KEY (64 hex chars) — for signing Migration Authorizations etc.
- *   - NODE_DID — the did:key that corresponds to the private key
- *
- * The public key can be derived from the DID by clients/verifiers.
- */
 let nodeDid: string | null = null;
-let nodeSigningPrivateKey: Uint8Array | null = null;
 let nodePublicKey: Uint8Array | null = null;
 let nodeIdentityInitialized = false;
 
-function initializeNodeIdentity(env: any) {
+function initializeNodeIdentity(env: Env) {
   if (nodeIdentityInitialized) return;
 
   const privKeyHex = env.NODE_SIGNING_PRIVATE_KEY;
   const did = env.NODE_DID;
-  const isDev = env.DEV_MODE === 'true';
-  const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 
   if (!privKeyHex || !did) {
-    if (isDev || isTest) {
-      console.warn('[NodeIdentity] Running in test/dev mode without node identity. Migration features disabled.');
-      nodeIdentityInitialized = true;
-      return;
-    }
-    throw new Error('Node identity is not configured');
-  }
-
-  // In DEV_MODE or test, be very lenient
-  if (isDev || isTest) {
-    try {
-      const privKey = Buffer.from(privKeyHex, 'hex');
-      if (privKey.length === 32 && did.startsWith('did:key:z6Mk')) {
-        nodeDid = did;
-        nodeSigningPrivateKey = privKey;
-        // Derive public key for proper node_identity publishing
-        nodePublicKey = ed.getPublicKey(privKey);
-      }
-    } catch (e) {
-      // swallow errors in test/dev
-    }
     nodeIdentityInitialized = true;
     return;
   }
 
-  // Production: strict
-  if (!did.startsWith('did:key:z6Mk')) {
-    throw new Error('NODE_DID must be a valid Ed25519 did:key');
+  try {
+    const privKey = hexToBytes(privKeyHex);
+    if (privKey.length === 32 && did.startsWith('did:key:z6Mk')) {
+      nodeDid = did;
+      nodePublicKey = ed.getPublicKey(privKey);
+    }
+  } catch {
+    // Optional node identity — ignore invalid configuration.
   }
 
-  const privKey = Buffer.from(privKeyHex, 'hex');
-  if (privKey.length !== 32) {
-    throw new Error('NODE_SIGNING_PRIVATE_KEY must be 64 hex characters');
-  }
-
-  nodeDid = did;
-  nodeSigningPrivateKey = privKey;
-  nodePublicKey = ed.getPublicKey(privKey);
   nodeIdentityInitialized = true;
-
-  console.log('[NodeIdentity] Node identity initialized:', nodeDid);
 }
 
 function getNodeIdentity() {
-  if (!nodeDid || !nodeSigningPrivateKey || !nodePublicKey) {
-    throw new Error('Node identity has not been initialized or is missing required configuration.');
+  if (!nodeDid || !nodePublicKey) {
+    throw new Error('Node identity is not configured');
   }
 
-  // Encode as base58btc multibase with Ed25519 prefix (same as did:key:z...)
   const prefix = new Uint8Array([0xed, 0x01]);
   const combined = new Uint8Array(prefix.length + nodePublicKey.length);
   combined.set(prefix);
   combined.set(nodePublicKey, prefix.length);
 
-  const publicKeyMultibase = bs58.encode(combined);
-
   return {
     did: nodeDid,
-    public_key: publicKeyMultibase
+    public_key: bs58.encode(combined),
   };
 }
 
-/**
- * Signs a Migration Authorization object using the node's dedicated Ed25519 key.
- * Uses JSON Canonicalization Scheme (RFC 8785) via the `canonicalize` package.
- */
-async function signMigrationAuthorization(auth: Record<string, any>): Promise<string> {
-  if (!nodeSigningPrivateKey) {
-    throw new Error('Node signing key is not available');
-  }
-
-  const canonicalJson = canonicalize(auth);
-  if (!canonicalJson) {
-    throw new Error('Failed to canonicalize Migration Authorization for signing');
-  }
-
-  const messageHash = sha256(new TextEncoder().encode(canonicalJson));
-  const signatureBytes = await ed.sign(messageHash, nodeSigningPrivateKey);
-  return Buffer.from(signatureBytes).toString('hex');
+function getMinChargeMb(env: Env): number {
+  const configured = parseInt(env.MIN_CHARGE_MB || '1', 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : 1;
 }
 
-function ensureNodeIdentity(c: any) {
-  const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-
-  // In test / vitest mode, completely bypass node identity (most stable approach)
-  if (isTest) {
-    return null;
-  }
-
-  initializeNodeIdentity(c.env);
-
-  const isDev = c.env.DEV_MODE === 'true';
-  if (!nodeDid && !isDev) {
-    return c.json(
-      { error: 'This node is not properly configured with a node identity (NODE_DID + NODE_SIGNING_PRIVATE_KEY)' },
-      500
-    );
-  }
-  return null;
+function getPricingMode(env: Env): 'public' | 'authenticated' {
+  return env.PRICING_MODE === 'authenticated' ? 'authenticated' : 'public';
 }
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Force test environment to be extremely lenient
 app.use('*', async (c, next) => {
-  const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-  if (isTest) {
+  if (isVitestRuntime()) {
     c.env.DEV_MODE = 'true';
-    // Completely disable node identity requirements in tests (v0.7.0 stabilization)
-    nodeIdentityInitialized = true;
-    nodeDid = 'did:key:z6Mktest';
-    nodeSigningPrivateKey = new Uint8Array(32);
-    nodePublicKey = new Uint8Array(32);
   }
   return next();
 });
 
-/**
- * SERVICE_SALT hardening (spec 10.2)
- * Reject requests on production nodes using dangerous default salts.
- */
 app.use('*', async (c, next) => {
   const salt = c.env.SERVICE_SALT || 'default_salt';
   const dangerous = ['test_salt', 'default_salt', ''];
   if (c.env.DEV_MODE !== 'true' && dangerous.includes(salt)) {
     return c.json({ error: 'Misconfigured node: insecure SERVICE_SALT (see spec 10.2)' }, 500);
   }
+  if (
+    c.env.DEV_MODE !== 'true' &&
+    getBillingMode(c.env) === 'entitlement' &&
+    !hasConfiguredEntitlementKeys(c.env)
+  ) {
+    return c.json({
+      error: 'Misconfigured node: BILLING_MODE=entitlement requires ENTITLEMENT_KEY_HASHES (see spec 10.2)',
+      code: 'MISCONFIGURED_ENTITLEMENT',
+    }, 500);
+  }
   return next();
 });
 
-/**
- * Global response middleware: add Date header on every response (required by spec 3.2).
- */
-// Global error handler - ensures we always return JSON errors instead of HTML
 app.onError((err, c) => {
   console.error('Unhandled error in worker:', err);
   return c.json({
     error: 'Internal Server Error',
-    message: err instanceof Error ? err.message : 'Unknown error'
+    message: err instanceof Error ? err.message : 'Unknown error',
   }, 500);
 });
 
@@ -201,53 +108,54 @@ app.use('*', async (c, next) => {
   c.header('Date', new Date().toUTCString());
 });
 
-/**
- * Helper to get JSON body from context or request.
- */
 async function getJsonBody(c: any) {
   const bodyText = c.get('bodyText');
   if (bodyText) return JSON.parse(bodyText);
   return c.req.json();
 }
 
-// All routes require DID authentication
 app.use('*', verifyDidSignature);
 
-/**
- * GET /.well-known/didbox-configuration
- * Capability discovery for the node.
- */
 app.get('/.well-known/didbox-configuration', async (c) => {
-  // NOTE: This endpoint MUST be public (no DID auth) per spec 7.1
+  initializeNodeIdentity(c.env);
 
-  // Strict node identity enforcement (hard fail in non-DEV_MODE)
-  const identityError = ensureNodeIdentity(c);
-  if (identityError) return identityError;
-
-  const response: any = {
-    protocol_version: '0.7.0',
-    supported_rails: ['L402', 'x402'],
+  const minChargeMb = getMinChargeMb(c.env);
+  const billingMode = getBillingMode(c.env);
+  const response: Record<string, unknown> = {
+    protocol_version: '0.9.1',
+    billing_mode: billingMode,
+    supported_rails: billingMode === 'entitlement' ? [] : ['L402', 'x402'],
+    pricing_mode: getPricingMode(c.env),
     limits: {
       max_payload_bytes: 10 * 1024 * 1024,
       max_lease_hours: 8760,
-      min_charge_mb: 1
+      min_charge_mb: minChargeMb,
     },
     endpoints: {
       store: '/store',
       retrieve: '/retrieve/{id}',
       extend: '/extend/{id}',
+      delete: '/store/{id}',
       inbox: '/inbox/{alias}',
       inboxes: '/inboxes',
       leases: '/leases',
-      price: '/price'
-    }
+      price: '/price',
+    },
   };
 
-  if (nodeDid) {
+  if (billingMode === 'entitlement') {
+    response.entitlement = {
+      methods: ['api_key'],
+      header: 'X-DIDBOX-Entitlement',
+      key_format: 'dbx_ent_<id>.<secret>',
+    };
+  }
+
+  if (nodeDid && nodePublicKey) {
     try {
       response.node_identity = getNodeIdentity();
     } catch {
-      // If identity not fully ready, skip publishing (dev mode)
+      // Optional identity — omit when unavailable.
     }
   }
 
@@ -256,35 +164,27 @@ app.get('/.well-known/didbox-configuration', async (c) => {
 
 app.get('/price', async (c) => {
   return c.json({
-    base_rate_per_mb_hour: parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100'),
-    inbox_creation_fee: parseInt(c.env.INBOX_CREATION_FEE || '1000'),
-    egress_rate_per_mb: parseInt(c.env.EGRESS_RATE_PER_MB || '0'),
-    min_charge_mb: 1
+    base_rate_per_mb_hour: parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100', 10),
+    inbox_creation_fee: parseInt(c.env.INBOX_CREATION_FEE || '1000', 10),
+    egress_rate_per_mb: parseInt(c.env.EGRESS_RATE_PER_MB || '0', 10),
+    min_charge_mb: getMinChargeMb(c.env),
   });
 });
 
-/**
- * GET /leases
- * Lists all active leases created by the authenticated DID.
- */
 app.get('/leases', async (c) => {
   const ownerHash = c.get('hashedDid');
   const records = await getOwnerRecords(c.env.DB, ownerHash);
-  
-  return c.json({ 
-    leases: records.map(r => ({
+
+  return c.json({
+    leases: records.map((r) => ({
       id: r.id,
       sizeBytes: r.size_bytes,
       expiresAt: r.expires_at,
-      recipientHash: r.recipient_hash
-    }))
+      recipientHash: r.recipient_hash,
+    })),
   });
 });
 
-/**
- * POST /inboxes
- * Creates a named inbox for the authenticated DID.
- */
 app.post('/inboxes', async (c) => {
   const { alias } = await getJsonBody(c);
   const did = c.get('did');
@@ -293,9 +193,10 @@ app.post('/inboxes', async (c) => {
 
   const hashedId = await hashDid(did + (alias || 'default'), salt);
 
-  const creationFee = parseInt(c.env.INBOX_CREATION_FEE || '1000');
-  if (!(await verifyAnyPayment(c, creationFee, 24))) {
-    return issueDualChallenge(c, creationFee);
+  const creationFee = parseInt(c.env.INBOX_CREATION_FEE || '1000', 10);
+  const inboxBilling = await requireBilling(c, creationFee, 24);
+  if (!inboxBilling.authorized) {
+    return inboxBilling.response;
   }
 
   await saveInbox(c.env.DB, {
@@ -305,52 +206,57 @@ app.post('/inboxes', async (c) => {
     created_at: new Date().toISOString(),
   });
 
-  return c.json({ alias: alias || 'default', hashedId, feePaid: creationFee });
+  return c.json({
+    alias: alias || 'default',
+    hashedId,
+    ...inboxBilling.receipt,
+  });
 });
 
-/**
- * GET /inboxes
- * List all created inboxes for the DID.
- */
 app.get('/inboxes', async (c) => {
   const ownerHash = c.get('hashedDid');
   const inboxes = await getInboxes(c.env.DB, ownerHash);
   return c.json({ inboxes });
 });
 
-/**
- * POST /store
- */
 app.post('/store', async (c) => {
   const { ciphertext, durationHours, recipientDid, inboxAlias } = await getJsonBody(c);
-  
-  // 1. Enforce Max Duration (1 Year = 8760 hours)
+
+  if (!Number.isInteger(durationHours) || durationHours < 1) {
+    return c.json({ error: 'durationHours must be a positive integer' }, 400);
+  }
+
   if (durationHours > 8760) {
     return c.json({ error: 'Max duration is 8760 hours (1 year)' }, 400);
   }
 
-  const sizeBytes = new TextEncoder().encode(ciphertext).length;
-  
-  // 2. Enforce Payload Size Limit (10MB for MVP)
-  if (sizeBytes > 10 * 1024 * 1024) {
+  const storageBytes = storageBytesFromCiphertext(ciphertext);
+  if (storageBytes === null) {
+    return c.json({ error: 'ciphertext must be valid base64-encoded bytes' }, 400);
+  }
+
+  const maxPayload = 10 * 1024 * 1024;
+  if (storageBytes > maxPayload) {
     return c.json({ error: 'Payload too large (Max 10MB)' }, 413);
   }
 
-  const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
-  const price = calculateStoragePrice(sizeBytes, durationHours, baseRate);
+  const minChargeMb = getMinChargeMb(c.env);
+  const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100', 10);
+  const price = calculateStoragePrice(storageBytes, durationHours, baseRate, minChargeMb);
 
-  if (!(await verifyAnyPayment(c, price, durationHours))) {
-    return issueDualChallenge(c, price);
+  const storeBilling = await requireBilling(c, price, durationHours);
+  if (!storeBilling.authorized) {
+    return storeBilling.response;
   }
 
   const storageId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + durationHours * 3600 * 1000).toISOString();
-  
+
   const salt = c.env.SERVICE_SALT || 'default_salt';
   const ownerHash = c.get('hashedDid');
-  const recipientHash = recipientDid ? 
-    await hashDid(recipientDid + (inboxAlias || 'default'), salt) : 
-    null;
+  const recipientHash = recipientDid
+    ? await hashDid(recipientDid + (inboxAlias || 'default'), salt)
+    : null;
 
   await c.env.STORAGE_BUCKET.put(`ciphertext/${storageId}`, ciphertext);
 
@@ -358,7 +264,7 @@ app.post('/store', async (c) => {
     id: storageId,
     owner_hash: ownerHash,
     recipient_hash: recipientHash,
-    size_bytes: sizeBytes,
+    size_bytes: storageBytes,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,
   });
@@ -366,14 +272,11 @@ app.post('/store', async (c) => {
   return c.json({
     storageId,
     expiresAt,
-    sizeBytes,
-    pricePaidSatoshis: price
+    sizeBytes: storageBytes,
+    ...storeBilling.receipt,
   });
 });
 
-/**
-* GET /retrieve/:id
-*/
 app.get('/retrieve/:id', async (c) => {
   const id = c.req.param('id');
   const alias = c.req.header('X-Inbox-Alias') || 'default';
@@ -391,67 +294,89 @@ app.get('/retrieve/:id', async (c) => {
   const recipientHashForAlias = await hashDid(did + alias, salt);
 
   if (ownerHash !== record.owner_hash && recipientHashForAlias !== record.recipient_hash) {
-    return c.json({ error: 'Unauthorized' }, 403);
+    return c.json({ error: 'Unauthorized', code: 'ACCESS_DENIED' }, 403);
   }
 
   const object = await c.env.STORAGE_BUCKET.get(`ciphertext/${id}`);
   if (!object) return c.json({ error: 'Blob not found' }, 404);
 
-  // Egress charging (Phase 3 / spec 4.5)
-  const egressRate = parseInt(c.env.EGRESS_RATE_PER_MB || '0');
+  const ciphertext = await object.text();
+  const transferBytes = transferBytesFromRetrieveBody(ciphertext);
+  const egressRate = parseInt(c.env.EGRESS_RATE_PER_MB || '0', 10);
+
   if (egressRate > 0) {
-    const sizeMb = Math.max(1, Math.ceil((record.size_bytes || 0) / 1048576));
-    const egressCost = sizeMb * egressRate;
-    // For full implementation, this should go through the normal 402 + verifyAnyPayment flow.
-    // Egress charging is not yet part of the paid flow (see FUTURE.md). Production nodes should implement proper 402 + verifyAnyPayment here.
-    console.log(`[egress] Would charge ${egressCost} sats for ${sizeMb}MB retrieval (rate=${egressRate})`);
+    const egressCost = calculateEgressPrice(transferBytes, egressRate, getMinChargeMb(c.env));
+    const egressBilling = await requireBilling(c, egressCost, 1);
+    if (!egressBilling.authorized) {
+      return egressBilling.response;
+    }
   }
 
-  const ciphertext = await object.text();
   return c.json({ ciphertext });
 });
 
-/**
- * GET /inbox/:alias?
- */
+app.delete('/store/:id', async (c) => {
+  const id = c.req.param('id');
+  const record = await getStorageRecord(c.env.DB, id);
+
+  if (!record) return c.json({ error: 'Not found' }, 404);
+
+  const ownerHash = c.get('hashedDid');
+  if (ownerHash !== record.owner_hash) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
+  if (new Date() > new Date(record.expires_at)) {
+    return c.json({ error: 'Expired' }, 410);
+  }
+
+  await c.env.STORAGE_BUCKET.delete(`ciphertext/${id}`);
+  await deleteStorageRecord(c.env.DB, id);
+
+  return c.body(null, 204);
+});
+
 app.get('/inbox/:alias?', async (c) => {
   const alias = c.req.param('alias') || 'default';
   const did = c.get('did');
   const salt = c.env.SERVICE_SALT || 'default_salt';
-  
+
   const recipientHash = await hashDid(did + alias, salt);
   const records = await getInboxRecords(c.env.DB, recipientHash);
-  
-  return c.json({ 
+
+  return c.json({
     alias,
-    items: records.map(r => ({
+    items: records.map((r) => ({
       id: r.id,
       sizeBytes: r.size_bytes,
-      expiresAt: r.expires_at
-    }))
+      expiresAt: r.expires_at,
+    })),
   });
 });
 
-/**
- * POST /extend/:id
- */
 app.post('/extend/:id', async (c) => {
   const id = c.req.param('id');
   const { additionalHours } = await getJsonBody(c);
-  
+
+  if (!Number.isInteger(additionalHours) || additionalHours < 1) {
+    return c.json({ error: 'additionalHours must be a positive integer' }, 400);
+  }
+
   const record = await getStorageRecord(c.env.DB, id);
   if (!record) return c.json({ error: 'Not found' }, 404);
 
   const ownerHash = c.get('hashedDid');
   if (ownerHash !== record.owner_hash) {
-    return c.json({ error: 'Unauthorized' }, 403);
+    return c.json({ error: 'Unauthorized', code: 'ACCESS_DENIED' }, 403);
   }
 
-  const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100');
-  const extraCost = calculateStoragePrice(record.size_bytes, additionalHours, baseRate);
+  const minChargeMb = getMinChargeMb(c.env);
+  const baseRate = parseInt(c.env.BASE_RATE_PER_MB_HOUR || '100', 10);
+  const extraCost = calculateStoragePrice(record.size_bytes, additionalHours, baseRate, minChargeMb);
 
-  if (!(await verifyAnyPayment(c, extraCost, additionalHours))) {
-    return issueDualChallenge(c, extraCost);
+  const extendBilling = await requireBilling(c, extraCost, additionalHours);
+  if (!extendBilling.authorized) {
+    return extendBilling.response;
   }
 
   const newExpiresAt = new Date(new Date(record.expires_at).getTime() + additionalHours * 3600 * 1000).toISOString();
@@ -460,13 +385,13 @@ app.post('/extend/:id', async (c) => {
   return c.json({
     storageId: id,
     newExpiresAt,
-    additionalCostSatoshis: extraCost
+    amountPaid: extendBilling.receipt.amountPaid,
+    currency: extendBilling.receipt.currency,
+    rail: extendBilling.receipt.rail,
+    additionalCostSatoshis: extendBilling.receipt.additionalCostSatoshis,
   });
 });
 
-/**
- * GET /janitor/purge
- */
 app.get('/janitor/purge', async (c) => {
   const adminToken = c.req.header('X-Admin-Token');
   if (adminToken !== c.env.ADMIN_TOKEN && c.env.DEV_MODE !== 'true') {
@@ -482,82 +407,9 @@ app.get('/janitor/purge', async (c) => {
     results.push(record.id);
   }
 
-  // Purge old nonces
-  await c.env.DB.prepare("DELETE FROM nonces WHERE expires_at < ?").bind(Date.now()).run();
+  await c.env.DB.prepare('DELETE FROM nonces WHERE expires_at < ?').bind(Date.now()).run();
 
   return c.json({ purged: results });
-});
-
-/**
- * POST /migrate/{storageId}/authorize  (v0.7.0+ Sovereign Mobility Phase 1)
- *
- * Returns a signed Migration Authorization proving the caller owns the box
- * and how much lease time remains.
- */
-app.post('/migrate/:id/authorize', async (c) => {
-  // Strict node identity enforcement
-  const identityError = ensureNodeIdentity(c);
-  if (identityError) return identityError;
-
-  const storageId = c.req.param('id');
-  const ownerHash = c.get('hashedDid');
-
-  // Verify ownership
-  const record = await getStorageRecord(c.env.DB, storageId);
-  if (!record) {
-    return c.json({ error: 'Not found' }, 404);
-  }
-  if (ownerHash !== record.owner_hash) {
-    return c.json({ error: 'Forbidden: You are not the owner of this storage box' }, 403);
-  }
-
-  // Check lease is still active
-  const now = new Date();
-  const expiresAt = new Date(record.expires_at);
-  if (now > expiresAt) {
-    return c.json({ error: 'Lease has expired' }, 410);
-  }
-
-  // Get ciphertext and compute hash (Phase 1: on-the-fly)
-  const object = await c.env.STORAGE_BUCKET.get(`ciphertext/${storageId}`);
-  if (!object) {
-    return c.json({ error: 'Blob not found' }, 404);
-  }
-
-  const ciphertextBytes = await object.arrayBuffer();
-  const hashBuffer = sha256(new Uint8Array(ciphertextBytes));
-  const ciphertextHash = 'sha256:' + Buffer.from(hashBuffer).toString('hex');
-
-  // Calculate remaining lease hours
-  const remainingMs = expiresAt.getTime() - now.getTime();
-  const remainingHours = Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60)));
-
-  // Build Migration Authorization
-  const issuedAt = new Date();
-  const authExpiresAt = new Date(Math.min(expiresAt.getTime(), issuedAt.getTime() + (48 * 60 * 60 * 1000)));
-
-  const migrationAuth: any = {
-    version: 1,
-    original_storage_id: storageId,
-    owner_did: c.get('did'),
-    size_bytes: record.size_bytes,
-    ciphertext_hash: ciphertextHash,
-    remaining_lease_hours: remainingHours,
-    issued_at: issuedAt.toISOString(),
-    expires_at: authExpiresAt.toISOString(),
-    source_node: new URL(c.req.url).origin,
-    issuance_nonce: crypto.randomUUID(),
-  };
-
-  // Sign the authorization using the dedicated node key + JCS
-  try {
-    migrationAuth.signature = await signMigrationAuthorization(migrationAuth);
-  } catch (err) {
-    console.error('Failed to sign Migration Authorization:', err);
-    return c.json({ error: 'Failed to sign migration authorization' }, 500);
-  }
-
-  return c.json(migrationAuth);
 });
 
 export default app;

@@ -1,6 +1,6 @@
 # @didbox/conformance
 
-The official Protocol Conformance Suite for **didbox402** (v0.7.0).
+The official Protocol Conformance Suite for **didbox402** (v0.9.1).
 
 > For information about test environment limitations and recommendations, see the root **[TESTING.md](../../TESTING.md)**.
 
@@ -59,7 +59,7 @@ The conformance suite validates the following core areas:
 - **Replay Resistance**: Rejects used signatures (DID nonces) and used payment proofs (L402 preimages and x402 tx hashes).
 - **Privacy Invariant**: Raw DIDs are never stored in persistent indexes.
 - **L402 & x402 Payment Flows** (v0.7.0+): Proper challenge issuance and proof submission for both Lightning and USDC rails.
-- **Migration (Sovereign Mobility Phase 1)**: `node_identity` discovery, `/migrate/{id}/authorize` endpoint, and Migration Proof verification.
+- **Enterprise Entitlement** (v0.9.0+): `billing_mode: entitlement`, API-key access, 403 on failure (separate profile; see TESTING.md).
 
 ## Running with Real Payment Providers (L402 & x402)
 

@@ -1,6 +1,8 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { LightningProvider, MockLightningProvider, AlbyProvider } from './lightning';
 import { Web3Provider, MockWeb3Provider, BaseUSDCProvider } from './web3';
+import { isVitestRuntime } from '../runtime';
+import { base64Decode, base64Encode, bytesToHex, hexToBytes, utf8Decode } from '../bytes';
 
 /**
  * Payment Rail Abstraction (v0.7.0)
@@ -67,14 +69,47 @@ function getWeb3Provider(env: any): Web3Provider {
  */
 export async function verifyAnyPayment(c: any, expectedAmount: number, leaseHours = 24): Promise<boolean> {
   const isDev = c.env.DEV_MODE === 'true';
-  const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-
-  // In DEV_MODE or test environment we allow everything (mock payments)
-  if (isDev || isTest) return true;
+  const isTest = isVitestRuntime();
 
   const authHeader = c.req.header('Authorization');
   const x402Header = c.req.header('PAYMENT-SIGNATURE');
   const recipient = c.env.USDC_WALLET_ADDRESS || '';
+
+  if (!authHeader?.startsWith('L402 ') && !x402Header) {
+    return false;
+  }
+
+  // DEV/test: accept mock proofs but still enforce replay protection and amount binding
+  if (isDev || isTest) {
+    if (authHeader?.startsWith('L402 ')) {
+      const token = authHeader.substring(5);
+      let paymentId = token;
+      let tokenAmount: number | undefined;
+      if (!token.includes('mock_')) {
+        try {
+          const macaroonPart = token.split(':')[0];
+          const decoded = JSON.parse(utf8Decode(base64Decode(macaroonPart)));
+          paymentId = decoded.paymentHash || token;
+          if (typeof decoded.amount === 'number') tokenAmount = decoded.amount;
+        } catch {
+          paymentId = token;
+        }
+      }
+      if (tokenAmount !== undefined && tokenAmount !== expectedAmount) return false;
+      if (await isPaymentUsed(c, paymentId)) return false;
+      await markPaymentUsed(c, paymentId, 'L402', expectedAmount, leaseHours);
+      return true;
+    }
+
+    if (x402Header) {
+      if (!/^0x[a-fA-F0-9]{64}$/.test(x402Header)) return false;
+      if (await isPaymentUsed(c, x402Header)) return false;
+      await markPaymentUsed(c, x402Header, 'x402', expectedAmount, leaseHours);
+      return true;
+    }
+
+    return false;
+  }
 
   // ===================== L402 (Lightning) =====================
   if (authHeader?.startsWith('L402 ')) {
@@ -90,7 +125,7 @@ export async function verifyAnyPayment(c: any, expectedAmount: number, leaseHour
 
     try {
       const parts = token.split(':');
-      const decodedToken = JSON.parse(Buffer.from(parts[0], 'base64').toString());
+      const decodedToken = JSON.parse(utf8Decode(base64Decode(parts[0])));
       const preimage = parts[1];
 
       // New v0.7.0 token format
@@ -117,7 +152,7 @@ export async function verifyAnyPayment(c: any, expectedAmount: number, leaseHour
 
       if (await isPaymentUsed(c, paymentId)) return false;
 
-      const actualHash = Buffer.from(sha256(Buffer.from(preimage, 'hex'))).toString('hex');
+      const actualHash = bytesToHex(sha256(hexToBytes(preimage)));
       const hashOk = actualHash === paymentId;
 
       if (hashOk) {
@@ -191,8 +226,8 @@ export async function issueDualChallenge(c: any, amount: number) {
   } else {
     // Legacy mock format for tests
     const preimage = crypto.getRandomValues(new Uint8Array(32));
-    const preimageHex = Buffer.from(preimage).toString('hex');
-    const realPaymentHash = Buffer.from(sha256(preimage)).toString('hex');
+    const preimageHex = bytesToHex(preimage);
+    const realPaymentHash = bytesToHex(sha256(preimage));
 
     macaroonPayload = {
       amount,
@@ -201,7 +236,7 @@ export async function issueDualChallenge(c: any, amount: number) {
     };
   }
 
-  const macaroon = Buffer.from(JSON.stringify(macaroonPayload)).toString('base64');
+  const macaroon = base64Encode(new TextEncoder().encode(JSON.stringify(macaroonPayload)));
   c.header('WWW-Authenticate', `L402 macaroon="${macaroon}", invoice="${bolt11}"`);
 
   // x402 Challenge (real on-chain verification when USDC_RPC_URL is set)
@@ -215,7 +250,7 @@ export async function issueDualChallenge(c: any, amount: number) {
     address: c.env.USDC_WALLET_ADDRESS || '0x0000000000000000000000000000000000000000',
     context: 'storage-lease',
   });
-  c.header('PAYMENT-REQUIRED', Buffer.from(x402Requirements).toString('base64'));
+  c.header('PAYMENT-REQUIRED', base64Encode(new TextEncoder().encode(x402Requirements)));
 
   return c.json({
     error: 'Payment Required',

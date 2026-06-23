@@ -1,6 +1,12 @@
 import { describe, test, expect } from 'vitest';
+import { baseUrl, signedFetch, storePayload } from './helpers';
 
-const baseUrl = process.env.DIDBOX_URL || 'http://localhost:8787';
+function uniqueMockTxHash(seed: string): string {
+  const hex = `${Date.now().toString(16)}${Array.from(seed)
+    .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
+    .join('')}`.padEnd(64, '0').slice(0, 64);
+  return `0x${hex}`;
+}
 
 function isRealX402Challenge(paymentRequired: string | null): boolean {
   if (!paymentRequired) return false;
@@ -13,161 +19,82 @@ function isRealX402Challenge(paymentRequired: string | null): boolean {
 }
 
 describe('didbox402: x402 (USDC) Conformance', () => {
-
   test('Returns proper x402 402 challenge with valid structure', async () => {
-    const res = await fetch(`${baseUrl}/store`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ciphertext: 'test-x402-structured',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
-    });
+    const body = storePayload('test-x402-structured');
+    const res = await signedFetch('/store', { method: 'POST', body });
 
-    if (res.status === 402) {
-      const paymentRequired = res.headers.get('PAYMENT-REQUIRED');
-      expect(paymentRequired).toBeDefined();
+    expect(res.status).toBe(402);
 
-      try {
-        const decoded = JSON.parse(Buffer.from(paymentRequired!, 'base64').toString());
+    const paymentRequired = res.headers.get('PAYMENT-REQUIRED');
+    expect(paymentRequired).toBeDefined();
 
-        expect(decoded).toHaveProperty('amount');
-        expect(decoded).toHaveProperty('currency');
-        expect(decoded.currency).toBe('USDC');
-        expect(['base', 'solana']).toContain(decoded.network);
-        expect(decoded).toHaveProperty('address');
-        expect(decoded).toHaveProperty('context');
+    const decoded = JSON.parse(Buffer.from(paymentRequired!, 'base64').toString());
+    expect(decoded).toHaveProperty('amount');
+    expect(decoded).toHaveProperty('currency');
+    expect(decoded.currency).toBe('USDC');
+    expect(['base', 'solana']).toContain(decoded.network);
+    expect(decoded).toHaveProperty('address');
+    expect(decoded).toHaveProperty('context');
 
-        if (isRealX402Challenge(paymentRequired)) {
-          console.log('✓ Node returned a real x402 challenge');
-        } else {
-          console.log('ℹ Node returned a mock x402 challenge');
-        }
-      } catch (e) {
-        throw new Error('PAYMENT-REQUIRED header was not valid base64 JSON');
-      }
+    if (isRealX402Challenge(paymentRequired)) {
+      console.log('✓ Node returned a real x402 challenge');
     } else {
-      console.log(`Note: Node returned ${res.status} instead of 402`);
+      console.log('ℹ Node returned a mock x402 challenge');
     }
   });
 
   test('Accepts a valid x402 proof after 402 challenge', async () => {
-    const storeRes1 = await fetch(`${baseUrl}/store`, {
+    const body = storePayload('test-x402-proof');
+    const storeRes1 = await signedFetch('/store', { method: 'POST', body });
+    expect(storeRes1.status).toBe(402);
+
+    const mockTxHash = uniqueMockTxHash('proof');
+
+    const storeRes2 = await signedFetch('/store', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ciphertext: 'test-x402-proof',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
+      body,
+      headers: { 'PAYMENT-SIGNATURE': mockTxHash },
     });
 
-    if (storeRes1.status !== 402) {
-      console.log('Skipping x402 proof test — no 402 received');
-      return;
-    }
-
-    const paymentRequired = storeRes1.headers.get('PAYMENT-REQUIRED');
-    if (!paymentRequired) return;
-
-    const mockTxHash = '0x' + 'a'.repeat(64);
-
-    const storeRes2 = await fetch(`${baseUrl}/store`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'PAYMENT-SIGNATURE': mockTxHash
-      },
-      body: JSON.stringify({
-        ciphertext: 'test-x402-proof',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
-    });
-
-    expect([200, 201]).toContain(storeRes2.status);
+    expect(storeRes2.status).toBe(200);
   });
 
   test('Rejects replay of the same x402 payment proof', async () => {
-    const storeRes1 = await fetch(`${baseUrl}/store`, {
+    const body1 = storePayload('replay-x402');
+    const storeRes1 = await signedFetch('/store', { method: 'POST', body: body1 });
+    expect(storeRes1.status).toBe(402);
+
+    const mockTxHash = uniqueMockTxHash('replay');
+
+    const res1 = await signedFetch('/store', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ciphertext: 'replay-x402',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
+      body: body1,
+      headers: { 'PAYMENT-SIGNATURE': mockTxHash },
+    });
+    expect(res1.status).toBe(200);
+
+    const body2 = storePayload('replay-x402-2');
+    const res2 = await signedFetch('/store', {
+      method: 'POST',
+      body: body2,
+      headers: { 'PAYMENT-SIGNATURE': mockTxHash },
     });
 
-    if (storeRes1.status !== 402) {
-      console.log('Skipping x402 replay test');
-      return;
-    }
-
-    const mockTxHash = '0x' + 'b'.repeat(64);
-
-    const res1 = await fetch(`${baseUrl}/store`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'PAYMENT-SIGNATURE': mockTxHash
-      },
-      body: JSON.stringify({
-        ciphertext: 'replay-x402',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
-    });
-    expect([200, 201]).toContain(res1.status);
-
-    // Replay should be rejected
-    const res2 = await fetch(`${baseUrl}/store`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'PAYMENT-SIGNATURE': mockTxHash
-      },
-      body: JSON.stringify({
-        ciphertext: 'replay-x402-2',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
-    });
-
-    expect(res2.status).not.toBe(200);
+    expect(res2.status).toBe(402);
   });
 
   test('Rejects malformed x402 payment proof', async () => {
-    const storeRes1 = await fetch(`${baseUrl}/store`, {
+    const body = storePayload('bad-x402-proof');
+    const storeRes1 = await signedFetch('/store', { method: 'POST', body });
+    expect(storeRes1.status).toBe(402);
+
+    const res2 = await signedFetch('/store', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ciphertext: 'bad-x402-proof',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
+      body,
+      headers: { 'PAYMENT-SIGNATURE': 'not-a-valid-tx-hash' },
     });
 
-    if (storeRes1.status !== 402) return;
-
-    // Submit invalid tx hash
-    const badTxHash = 'not-a-valid-tx-hash';
-
-    const res2 = await fetch(`${baseUrl}/store`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'PAYMENT-SIGNATURE': badTxHash
-      },
-      body: JSON.stringify({
-        ciphertext: 'bad-x402-proof',
-        durationHours: 1,
-        recipientDid: 'did:key:z6Mktest'
-      })
-    });
-
-    expect(res2.status).not.toBe(200);
+    expect(res2.status).toBe(402);
   });
 
   test('Advertises x402 support in discovery (if configured)', async () => {

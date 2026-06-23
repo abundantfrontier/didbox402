@@ -1,16 +1,16 @@
 {
   "name": "@didbox/server",
-  "version": "0.7.0",
+  "version": "0.9.1",
   "scripts": {
-    "dev": "wrangler dev src/index.ts",
+    "dev": "wrangler d1 execute didbox402-db --local --file=schema.sql && wrangler dev src/index.ts",
+    "dev:entitlement": "wrangler d1 execute didbox402-db-entitlement --local --file=schema.sql --config wrangler.entitlement.toml && wrangler dev src/index.ts --config wrangler.entitlement.toml --port 8788",
     "deploy": "wrangler deploy --minify src/index.ts",
-    "test": "vitest"
+    "test": "vitest run --config vitest.unit.config.ts"
   },
   "dependencies": {
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
     "bs58": "^6.0.0",
-    "canonicalize": "^2.0.0",
     "hono": "^4.0.0",
     "lsat-js": "^2.0.6",
     "viem": "^2.48.11"

@@ -4,7 +4,73 @@ All notable changes to the **didbox402** protocol and reference implementation w
 
 ## [Unreleased]
 
-### Documentation & Guidance (Post v0.7.0)
+## [0.9.1] - 2026-06-23
+
+### Protocol Specification (panel review fixes)
+- Fixed footer version drift; bumped to **v0.9.1**.
+- Resolved egress 402 vs entitlement contradiction: micropayment-only 402; entitlement satisfies egress via credential.
+- Split §10.1 conformance into **core**, **micropayment**, and **enterprise-internal** gauntlets.
+- Added normative §9.1 client obligations for `billing_mode` / entitlement handling.
+- `ENTITLEMENT_REQUIRED` is now **MUST**; introduced `ACCESS_DENIED` for resource ACL 403s.
+- Clarified 402 challenge headers are normative; JSON body is optional/informational.
+- Expanded §4.6: trust model, org-wide bearer key limitation, secret entropy, rotation, logging, egress, quota deferral.
+- Updated `docs/threat-model.html` for entitlement rail and dual-mode confusion.
+- OpenAPI: `entitlement`/`none` receipts, 403 on billable paths, conditional `/price` auth note.
+
+### Reference Implementation & SDK
+- Constant-time entitlement hash compare; startup guard when `BILLING_MODE=entitlement` without configured hashes (non-DEV).
+- `ACCESS_DENIED` code on retrieve/extend ACL failures.
+- SDK: `clearDiscoveryCache()`, `supported_rails`-aware 402 settlement.
+
+### Conformance
+- Entitled retrieve test; entitlement node never returns 402 on store.
+
+## [0.9.0] - 2026-06-22
+
+### Protocol Specification
+- **`billing_mode`** (`micropayment` | `entitlement`) advertised per-node in discovery.
+- **Entitlement billing (Phase 1):** Enterprise internal nodes use `X-DIDBOX-Entitlement` API keys (`dbx_ent_<id>.<secret>`); missing/invalid → `403` (not `402`).
+- Success receipts include `{ amountPaid: "0", currency: "none", rail: "entitlement" }`.
+- Micropayment nodes unchanged; clients branch per-node from discovery.
+
+### Reference Implementation & SDK
+- `requireBilling()` gate in reference server; `BILLING_MODE` + `ENTITLEMENT_KEY_HASHES` env vars.
+- `npm run dev:entitlement` starts entitlement profile on port 8788.
+- SDK: `entitlementKey` config + discovery-driven billing branch.
+
+### Conformance
+- New `entitlement.test.ts` (enterprise-internal profile; skips when entitlement server not running).
+
+### Documentation
+- PROTOCOL.md §4.6; FUTURE.md Phase 2 enterprise extensions.
+
+## [0.8.0] - 2026-06-22
+
+### Protocol Specification (Breaking / Cleanup)
+- **Removed server-side migration**: `POST /migrate/{id}/authorize` and Migration Authorization format removed. Cross-node movement is client-only (`retrieve` + `store`). See PROTOCOL.md §5.5.
+- **`node_identity` optional**: No longer required in discovery or for conformance.
+- **`DELETE /store/{id}`**: Owner-initiated early purge; no rebate for unused lease time.
+- **Pricing clarity**:
+  - Storage sized on decoded base64 ciphertext bytes (`storageBytes`).
+  - Egress sized on actual `GET /retrieve` response body octets (`transferBytes`).
+  - `min_charge_mb` is operator-configurable (RECOMMENDED default `1`, not protocol-mandated).
+  - `pricing_mode` (`public` | `authenticated`) advertised in discovery; public `/price` needs no DID auth.
+- **Rail-neutral payment fields**: `amountPaid`, `currency`, `rail` on paid responses; satoshi-named fields deprecated as aliases.
+
+### Reference Implementation & SDK
+- Reference server aligned with v0.8.0 pricing, delete endpoint, optional node identity.
+- SDK: removed `getMigrationProof()`; `migrate()` is retrieve + store only; added `delete()`.
+- Removed `@didbox/sdk-crypto` migration verification module.
+
+### Conformance
+- Removed migration conformance tests.
+- Added delete conformance tests; updated economics/storage tests for v0.8.0 discovery schema.
+
+### Documentation
+- OpenAPI 3.1 spec updated to v0.8.0.
+- Sovereign Mobility design docs marked superseded.
+
+### Documentation & Guidance (carried from post-v0.7.0 work)
 
 - Added new design document: **[Privacy-Preserving Paid Content Distribution](docs/designs/paid-content-distribution-pattern.md)** — Documents the recommended pattern of performing payments off-protocol (directly between buyer and seller) while using didbox402 only for private delivery of encrypted content. Includes legal, uplifting use cases focused on independent journalism & research, professional knowledge products, research datasets, and creative assets. Emphasizes alignment with core privacy and "ghost provider" principles.
 - Added significant operational guidance for production node operators in the [Implementer's Guide](docs/implementer-guide.html):

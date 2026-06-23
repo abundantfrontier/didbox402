@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: didbox402 Protocol API
-  version: 0.7.0
+  version: 0.9.1
   description: |
     Agent-native open protocol for ephemeral, paid, and verifiable storage.
     All requests (except discovery) MUST be authenticated using DID signatures with temporal binding.
@@ -37,6 +37,11 @@ components:
       in: header
       name: X-DID-Timestamp
       description: "Unix epoch milliseconds (UTC)"
+    EntitlementKey:
+      type: apiKey
+      in: header
+      name: X-DIDBOX-Entitlement
+      description: "Org API key (dbx_ent_<id>.<secret>) when billing_mode is entitlement"
 
   parameters:
     XInboxAlias:
@@ -61,16 +66,38 @@ components:
 
     DiscoveryResponse:
       type: object
-      required: [protocol_version, supported_rails, limits, endpoints, node_identity]
+      required: [protocol_version, billing_mode, supported_rails, pricing_mode, limits, endpoints]
       properties:
         protocol_version:
           type: string
-          example: "0.7.0"
+          example: "0.9.1"
+        billing_mode:
+          type: string
+          enum: [micropayment, entitlement]
+          default: micropayment
+        pricing_mode:
+          type: string
+          enum: [public, authenticated]
+          default: public
         supported_rails:
           type: array
           items:
             type: string
             enum: [L402, x402]
+        entitlement:
+          type: object
+          properties:
+            methods:
+              type: array
+              items:
+                type: string
+                enum: [api_key]
+            header:
+              type: string
+              example: X-DIDBOX-Entitlement
+            key_format:
+              type: string
+              example: "dbx_ent_<id>.<secret>"
         limits:
           type: object
           properties:
@@ -98,18 +125,17 @@ components:
               type: string
             price:
               type: string
-            migrate_authorize:
+            delete:
               type: string
-              description: "POST /migrate/{id}/authorize (v0.7.0+ Sovereign Mobility)"
           example:
             store: "/store"
             retrieve: "/retrieve/{id}"
             extend: "/extend/{id}"
+            delete: "/store/{id}"
             inbox: "/inbox/{alias}"
             inboxes: "/inboxes"
             leases: "/leases"
             price: "/price"
-            migrate_authorize: "/migrate/{id}/authorize"
         node_identity:
           type: object
           required: [did, public_key]
@@ -161,8 +187,17 @@ components:
           format: date-time
         sizeBytes:
           type: integer
+        amountPaid:
+          type: string
+        currency:
+          type: string
+          enum: [sats, USDC, none]
+        rail:
+          type: string
+          enum: [L402, x402, entitlement]
         pricePaidSatoshis:
           type: integer
+          deprecated: true
 
     PaymentRequired:
       type: object
@@ -228,10 +263,11 @@ paths:
     get:
       tags: [Economics]
       summary: Current pricing
-      security:
-        - DIDAuth: []
-        - DIDSignature: []
-        - DIDTimestamp: []
+      description: >
+        Effective authentication depends on pricing_mode from discovery.
+        When pricing_mode is public, no DID headers are required.
+        When pricing_mode is authenticated, DID auth is required (401 if missing).
+      security: []
       responses:
         '200':
           description: Current rates
@@ -268,11 +304,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/StoreResponse'
         '402':
-          description: Payment required
+          description: Payment required (micropayment mode only)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentRequired'
+        '403':
+          description: Entitlement required (entitlement mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Valid entitlement required
+                code: ENTITLEMENT_REQUIRED
         '413':
           description: Payload too large
           content:
@@ -307,8 +352,18 @@ paths:
                     type: string
         '410':
           description: Lease expired
+        '402':
+          description: Egress payment required (micropayment mode when egress_rate_per_mb > 0)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRequired'
         '403':
-          description: Unauthorized
+          description: Access denied or entitlement required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /extend/{id}:
     post:
@@ -338,7 +393,17 @@ paths:
         '200':
           description: Lease extended
         '402':
-          description: Payment required
+          description: Payment required (micropayment mode only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRequired'
+        '403':
+          description: Entitlement required (entitlement mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /leases:
     get:
@@ -402,7 +467,13 @@ paths:
         '200':
           description: Inbox created
         '402':
-          description: Payment required for inbox creation fee
+          description: Payment required for inbox creation fee (micropayment mode)
+        '403':
+          description: Entitlement required (entitlement mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /janitor/purge:
     get:
@@ -419,16 +490,13 @@ paths:
         '403':
           description: Unauthorized
 
-  /migrate/{storageId}/authorize:
-    post:
+  /store/{id}:
+    delete:
       tags: [Storage]
-      summary: Request a Migration Authorization from the source node (v0.7.0+)
-      description: |
-        Returns a signed Migration Authorization proving ownership of a box and the remaining lease time.
-        This is the first step of the Sovereign Mobility (Phase 1) flow.
-        The authorization is generic — it is not tied to a specific destination node.
+      summary: Owner-initiated early delete
+      description: Purges the box immediately. No rebate for unused lease time.
       parameters:
-        - name: storageId
+        - name: id
           in: path
           required: true
           schema:
@@ -438,65 +506,12 @@ paths:
         - DIDSignature: []
         - DIDTimestamp: []
       responses:
-        '200':
-          description: Migration Authorization successfully issued
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MigrationAuthorization'
-        '403':
-          description: Authenticated DID is not the owner of the storage box
+        '204':
+          description: Deleted
+        '404':
+          description: Not found or not owner
         '410':
-          description: Lease has already expired
-
-components:
-  schemas:
-    MigrationAuthorization:
-      type: object
-      required:
-        - version
-        - original_storage_id
-        - owner_did
-        - size_bytes
-        - ciphertext_hash
-        - remaining_lease_hours
-        - issued_at
-        - expires_at
-        - signature
-      properties:
-        version:
-          type: integer
-          example: 1
-        original_storage_id:
-          type: string
-          format: uuid
-        owner_did:
-          type: string
-          example: "did:key:z6Mk..."
-        size_bytes:
-          type: integer
-        ciphertext_hash:
-          type: string
-          description: "sha256:0x..."
-        remaining_lease_hours:
-          type: integer
-        issued_at:
-          type: string
-          format: date-time
-        expires_at:
-          type: string
-          format: date-time
-        source_node:
-          type: string
-          nullable: true
-          description: URL of the source node (optional for privacy)
-        issuance_nonce:
-          type: string
-          nullable: true
-          description: Unique nonce for this authorization (recommended for replay protection)
-        signature:
-          type: string
-          description: Hex-encoded Ed25519 signature over the JCS-canonicalized object (excluding the signature field) using the node's signing key.
+          description: Lease expired
 
 security:
   - DIDAuth: []

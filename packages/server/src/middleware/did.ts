@@ -3,6 +3,8 @@ import * as ed from '@noble/ed25519';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { sha512 } from '@noble/hashes/sha2.js';
 import bs58 from 'bs58';
+import { isVitestRuntime } from '../lib/runtime';
+import { bytesToHex, hexToBytes } from '../lib/bytes';
 
 // noble-ed25519 v3+ requires SHA-512 to be set manually
 ed.hashes.sha512 = (msg: Uint8Array) => sha512(msg);
@@ -12,8 +14,7 @@ ed.hashes.sha512 = (msg: Uint8Array) => sha512(msg);
  */
 export async function hashDid(did: string, salt: string): Promise<string> {
   const msgUint8 = new TextEncoder().encode(did + salt);
-  const hashBuffer = sha256(msgUint8);
-  return Buffer.from(hashBuffer).toString('hex');
+  return bytesToHex(sha256(msgUint8));
 }
 
 /**
@@ -40,19 +41,21 @@ function extractPublicKeyFromDid(did: string): Uint8Array {
  * Enforces signature binding: Hash(Timestamp + Method + Path + Body_Hash)
  */
 export async function verifyDidSignature(c: Context, next: Next) {
-  const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+  const isTest = isVitestRuntime();
+  const isDev = c.env.DEV_MODE === 'true';
+  const pathname = new URL(c.req.url).pathname;
 
-  // In test mode, completely bypass DID signature verification
-  if (isTest) {
-    // Still set some dummy values so downstream code doesn't break
-    if (!c.get('did')) c.set('did', 'did:key:z6Mktest');
-    if (!c.get('hashedDid')) c.set('hashedDid', 'testhash');
+  // Discovery endpoint must be public (spec 7.1)
+  if (pathname === '/.well-known/didbox-configuration') {
     return next();
   }
 
-  // Discovery endpoint must be public (spec 7.1)
-  if (new URL(c.req.url).pathname === '/.well-known/didbox-configuration') {
-    return next();
+  // Public pricing mode does not require DID authentication (spec 4.5 / 5.3)
+  if (pathname === '/price') {
+    const pricingMode = c.env.PRICING_MODE === 'authenticated' ? 'authenticated' : 'public';
+    if (pricingMode === 'public') {
+      return next();
+    }
   }
 
   const did = c.req.header('X-DID');
@@ -61,6 +64,16 @@ export async function verifyDidSignature(c: Context, next: Next) {
 
   if (!did || !signature || !timestampHeader) {
     return c.json({ error: 'Missing X-DID, X-DID-Signature, or X-DID-Timestamp' }, 401);
+  }
+
+  // In test/dev mode, skip cryptographic verification but still require auth headers
+  if (isTest || isDev) {
+    const bodyText = await c.req.text();
+    c.set('did', did);
+    c.set('bodyText', bodyText);
+    const salt = c.env.SERVICE_SALT || 'default_salt';
+    c.set('hashedDid', await hashDid(did, salt));
+    return next();
   }
 
   // 5-minute drift window
@@ -90,9 +103,9 @@ export async function verifyDidSignature(c: Context, next: Next) {
     const bodyText = await c.req.text();
 
     const bodyHash = sha256(new TextEncoder().encode(bodyText));
-    const requestHash = sha256(new TextEncoder().encode(`${timestamp}${method}${path}${Buffer.from(bodyHash).toString('hex')}`));
+    const requestHash = sha256(new TextEncoder().encode(`${timestamp}${method}${path}${bytesToHex(bodyHash)}`));
 
-    const sigBytes = Buffer.from(signature, 'hex');
+    const sigBytes = hexToBytes(signature);
     const isValid = await ed.verify(sigBytes, requestHash, publicKey);
 
     if (!isValid) {

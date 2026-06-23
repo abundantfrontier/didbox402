@@ -7,8 +7,8 @@ const program = new Command();
 
 program
   .name('didbox-conformance')
-  .description('Official Protocol Conformance Suite for didbox402 (v0.7.0)')
-  .version('0.7.0')
+  .description('Official Protocol Conformance Suite for didbox402 (v0.8.0)')
+  .version('0.8.0')
   .requiredOption('-u, --url <url>', 'Base URL of the didbox402 node')
   .requiredOption('-d, --did <did>', 'Test DID to use for requests')
   .requiredOption('-k, --key <key>', 'Hex private key for the test DID')
@@ -48,13 +48,13 @@ program
         console.log(`Test Identity: ${options.did}`);
         console.log('');
 
-        console.log('Available Test Categories (v0.7.0):');
+        console.log('Available Test Categories (v0.8.0):');
         console.log('  - auth        : DID signature validation, replay protection, drift window');
-        console.log('  - economics   : Pricing, 402 challenges, min charge enforcement');
+        console.log('  - economics   : Pricing, 402 challenges, operator min_charge_mb floor');
         console.log('  - storage     : Basic store/retrieve/ownership flows');
+        console.log('  - delete      : Owner-initiated DELETE /store/{id}');
         console.log('  - l402        : Lightning (L402) challenge + real Alby provider support');
         console.log('  - x402        : USDC (x402) challenge + real Base provider support');
-        console.log('  - migration   : Sovereign Mobility Phase 1 (getMigrationProof + node_identity)');
         console.log('');
         console.log('Real Payment Providers:');
         console.log('  Set ALBY_API_KEY and/or USDC_RPC_URL to run against live rails.');

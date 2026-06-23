@@ -1,26 +1,25 @@
 /**
- * Calculate the storage price in Satoshis.
- * Formula: (bytes / 1,048,576) * hours * baseRatePerMbHour
+ * Storage pricing: uses decoded ciphertext bytes and operator-configured floor.
  */
 export function calculateStoragePrice(
-  sizeBytes: number,
+  storageBytes: number,
   durationHours: number,
-  baseRatePerMbHour: number
+  baseRatePerMbHour: number,
+  minChargeMb = 1
 ): number {
-  const sizeMb = Math.max(1, sizeBytes / (1024 * 1024));
+  const sizeMb = Math.max(minChargeMb, Math.ceil(storageBytes / 1048576));
   const cost = sizeMb * durationHours * baseRatePerMbHour;
   return Math.ceil(cost);
 }
 
 /**
- * Calculate the retrieval (egress) price in Satoshis.
- * Formula: (bytes / 1,048,576) * egressRatePerMb
+ * Egress pricing: uses actual retrieve response body octets and operator floor.
  */
-export function calculateRetrievalPrice(
-  sizeBytes: number,
-  egressRatePerMb: number
+export function calculateEgressPrice(
+  transferBytes: number,
+  egressRatePerMb: number,
+  minChargeMb = 1
 ): number {
-  const sizeMb = Math.max(1, sizeBytes / (1024 * 1024));
-  const cost = sizeMb * egressRatePerMb;
-  return Math.ceil(cost);
+  const transferMb = Math.max(minChargeMb, Math.ceil(transferBytes / 1048576));
+  return Math.ceil(transferMb * egressRatePerMb);
 }

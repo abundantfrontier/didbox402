@@ -72,7 +72,34 @@ When these are present, the CLI will print:
 
 > "Running with Real Payment Providers"
 
-This is the mode used for official v0.7.0+ validation.
+This is the mode used for official v0.8.0+ validation.
+
+### Conformance Profiles (v0.9.1)
+
+| Profile | Scope |
+|---------|--------|
+| `core` | Auth, storage, delete, economics, discovery |
+| `rail:L402` | L402 challenge + settlement (when advertised) |
+| `rail:x402` | x402 challenge + settlement (when advertised) |
+| `enterprise-internal` | Entitlement billing (`billing_mode: entitlement`); requires entitlement dev server |
+| `billing-guard` | Micropayment nodes reject entitlement-only bypass (402, not 200) |
+
+**Enterprise-internal profile** (optional):
+
+```bash
+# Terminal 1 — micropayment node (default)
+cd packages/server && npm run dev
+
+# Terminal 2 — entitlement node
+cd packages/server && npm run dev:entitlement
+
+# Terminal 3 — conformance (entitlement tests auto-skip if :8788 is down)
+npm test
+```
+
+Test key for local entitlement server: `dbx_ent_test.conformance-secret`
+
+Nodes advertising `supported_rails: ["x402"]` only are fully conformant when all `core` + `rail:x402` tests pass.
 
 ## Test Coverage Expectations
 
@@ -81,13 +108,13 @@ This is the mode used for official v0.7.0+ validation.
 | Authentication & Signatures | Partial             | Strong                 | Nonce + timestamp binding |
 | Payment Rails (L402 + x402) | Partial             | Strong                 | Real providers supported |
 | Replay Protection           | Partial             | Strong                 | Both auth nonces + `used_payments` |
-| Migration (v0.7.0+)         | Good                | Basic                  | More coverage planned |
-| Economic Integrity          | Good                | Strong                 | Pricing + 402 challenges |
+| Owner Delete (v0.8.0+)      | Good                | Basic                  | `DELETE /store/{id}` |
+| Economic Integrity          | Good                | Strong                 | `storageBytes` / `transferBytes` + operator `min_charge_mb` |
 | Privacy (no raw DIDs)       | Good                | Strong                 | - |
 
 ## Adding New Tests
 
-When adding new protocol features (e.g., future migration phases):
+When adding new protocol features:
 
 1. Add unit/integration tests in the relevant package.
 2. **Always** add corresponding tests to `packages/conformance/src/server/`.
@@ -97,8 +124,7 @@ When adding new protocol features (e.g., future migration phases):
 
 - Migrate more tests to use the standalone conformance runner.
 - Investigate alternative Workers testing solutions (e.g., `wrangler test` improvements or custom harness).
-- Add end-to-end migration tests using two local nodes.
 
 ---
 
-**Last Updated:** 2026-05-15 (v0.7.0 release)
+**Last Updated:** 2026-06-23 (v0.9.1 release)

@@ -2,16 +2,46 @@
 
 This roadmap outlines the planned evolution of the **didbox402** protocol and reference implementation.
 
-## Current Milestone: v0.7.0 (Sovereign Mobility + Real Rails)
+## Current Milestone: v0.9.1 (Panel Review Fixes)
 **Status:** Released
-**Focus:** Client-driven migration, Node Identity, real payment provider integration, and conformance expansion.
+**Focus:** Spec consistency, threat model, conformance gauntlet split, SDK hardening.
 
-- [x] Sovereign Mobility Phase 1 (Migration Proofs + Node Identity + JCS signing)
+- [x] Egress/402 vs entitlement contradiction resolved
+- [x] §9.1 / §10.1 / §5.1 normative alignment
+- [x] Threat model updated for entitlement rail
+- [x] OpenAPI receipt enums + 403 responses
+- [x] Server startup guard + constant-time compare + `ACCESS_DENIED`
+- [x] SDK `clearDiscoveryCache` + `supported_rails` settlement
+
+## Previous Milestone: v0.9.0 (Enterprise Entitlement — Phase 1)
+**Status:** Released
+**Focus:** Per-node `billing_mode`, API-key entitlement for internal installs, dual-mode client support.
+
+- [x] `billing_mode` (`micropayment` | `entitlement`) in discovery
+- [x] `X-DIDBOX-Entitlement` API keys (hashed server-side)
+- [x] 403 + `ENTITLEMENT_REQUIRED` on failure; entitlement receipts on success
+- [x] SDK discovery branch + `entitlementKey` config
+- [x] Enterprise-internal conformance profile (`entitlement.test.ts`)
+- [x] Phase 2 extensions documented in FUTURE.md
+
+## Previous Milestone: v0.8.0 (Spec Cleanup + Privacy Simplification)
+**Status:** Released
+**Focus:** Pricing clarity, client-only cross-node movement, owner delete, optional node identity.
+
+- [x] Remove server-side migration endpoints and Migration Authorization
+- [x] `DELETE /store/{id}` (owner purge, no rebate)
+- [x] Decoded `storageBytes` + `transferBytes` egress sizing; operator `min_charge_mb`
+- [x] `pricing_mode` + public `/price` by default
+- [x] Rail-neutral `amountPaid` / `currency` / `rail` response fields
+- [x] Conformance suite updated (delete tests; migration tests removed)
+
+## Previous Milestone: v0.7.0 (Sovereign Mobility + Real Rails)
+**Status:** Superseded by v0.8.0 migration removal
+**Focus:** Real payment rails and conformance expansion (migration proofs since removed).
+
 - [x] Real L402 (AlbyProvider) + Real x402 (BaseUSDCProvider + viem)
 - [x] Versioned L402 token + `used_payments` replay protection
-- [x] Expanded Conformance Suite (`l402.test.ts`, `x402.test.ts`, negative/adversarial cases)
-- [x] SDK migration helpers (`getMigrationProof`, `migrate`, `DidBoxClient.forNode`)
-- [x] All documentation updated to v0.7.0
+- [x] Expanded Conformance Suite (`l402.test.ts`, `x402.test.ts`)
 
 ## Previous Milestone: v0.6.x (Security & Interoperability Hardening)
 **Goal:** Enable agents to migrate effortlessly between nodes and providers while preserving cryptographic sovereignty.
@@ -32,7 +62,7 @@ This phase introduces a client-orchestrated migration flow using a signed **Migr
 ### Focus Areas for v0.7.0:
 1.  **Sovereign Mobility (Phase 1):** Verifiable migration paths using the Migration Authorization model (see design doc).
 2.  **Full Real Payment Rails:** Production-grade L402 (Alby) and x402 (viem) implementations with proper replay protection.
-3.  **Verifiable Credentials (VCs):** Initial support for gated storage based on signed credentials.
+3.  **Verifiable Credentials (VCs):** Moved to long-term extensions (see `docs/extensions.html`).
 4.  **Reference Implementations:** Additional platforms (AWS Lambda + S3, standard Node.js + MinIO).
 
 ## Long-Term Vision (v1.0.0 and beyond)

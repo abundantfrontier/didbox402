@@ -1,7 +1,7 @@
 # Client SDK Design for Sovereign Mobility – Phase 1 (v0.7.0)
 
-**Status:** Implemented (v0.7.0)  
-**Target Release:** v0.7.0  
+**Status:** **Superseded / Withdrawn** (v0.8.0 removed server migration proofs)  
+**Target Release:** v0.7.0 (shipped, then removed)
 **Related Design:** [v0.7.0 Sovereign Mobility – Phase 1 (Minimal Migration)](v070-sovereign-mobility-phase1.md)  
 **Implementation Plan:** [Client SDK Implementation Plan](v070-client-sdk-migration-implementation-plan.md)
 

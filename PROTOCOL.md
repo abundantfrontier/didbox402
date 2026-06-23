@@ -1,4 +1,4 @@
-# didbox402 Protocol Specification (v0.7.0)
+# didbox402 Protocol Specification (v0.9.1)
 
 **didbox402** is an agent-native open protocol for ephemeral, paid, and verifiable storage. It facilitates trustless data handoff between autonomous entities using Decentralized Identifiers (DIDs) and micropayments.
 
@@ -71,18 +71,25 @@ Every signature MUST be unique and temporally bound.
 
 ## 4. Economics (The Rail)
 
-didbox402 nodes MUST enforce resource allocation via the **402 Payment Required** status code.
+didbox402 nodes MUST enforce resource allocation using a **`billing_mode`** advertised in discovery:
 
-### 4.1 Payment Rails
-A node **MUST** support at least one payment rail and **SHOULD** support both:
+| `billing_mode` | Settlement |
+|----------------|------------|
+| `micropayment` (default) | **402 Payment Required** + L402 and/or x402 |
+| `entitlement` | Org API key via `X-DIDBOX-Entitlement`; missing/invalid → **403** |
+
+**DID authentication is unchanged** in both modes. `billing_mode` is per-node; clients MUST read discovery for each endpoint URL and branch accordingly. A single client MAY talk to micropayment public nodes and entitlement internal nodes concurrently.
+
+### 4.1 Payment Rails (Micropayment Mode)
+When `billing_mode` is `micropayment`, a node **MUST** support at least one payment rail and **SHOULD** support both:
 
 - **L402 (Lightning Network):** Satoshis with Macaroon-based authentication.
 - **x402 (Web3/Stablecoin):** USDC stablecoin settlement (e.g., Base chain).
 
 **Partial Rail Support:** A node MAY advertise support for only a subset of rails (e.g., `["x402"]` only) in its discovery response. Such nodes remain fully compliant provided they correctly implement the rails they advertise. Clients MUST only use rails that the node has advertised as supported. Conformance testing SHOULD be limited to the rails declared in `supported_rails`.
 
-### 4.2 Standardized Challenges
-Nodes MUST respond to unpaid requests with `402 Payment Required` and the following headers:
+### 4.2 Standardized Challenges (Micropayment Mode)
+When `billing_mode` is `micropayment`, nodes MUST respond to unpaid billable requests with `402 Payment Required` and the following headers:
 - **L402:** `WWW-Authenticate: L402 macaroon="{base64}", invoice="{bolt11}"`
 - **x402:** `PAYMENT-REQUIRED: {base64_json}`
 
@@ -96,6 +103,8 @@ Nodes MUST respond to unpaid requests with `402 Payment Required` and the follow
   "context": "string"          // optional, e.g. storage request hash or storageId
 }
 ```
+
+**402 response body:** The normative challenge is carried in the headers above. Nodes **MAY** include a JSON body (e.g. `error`, `amount_satoshis`, `protocols`) for client convenience; clients MUST NOT require a specific JSON body schema to detect or settle payment. All other 4xx/5xx responses use the normative envelope in §5.1.
 
 ### 4.3 x402 Settlement Flow
 The x402 rail enables push-based payments using Web3 rails (e.g., USDC on Base).
@@ -129,18 +138,69 @@ CREATE INDEX IF NOT EXISTS idx_used_payments_expiry ON used_payments(expires_at)
 ### 4.5 Pricing Model (Normative)
 All monetary values are expressed in the smallest unit of the rail (satoshis for L402, USDC with 6 decimal places for x402).
 
-**Storage Price Calculation (MUST be used by servers):**
+**Storage sizing and price (MUST be used by servers):**
 ```
-sizeMb = max(1, ceil(payloadBytes / 1048576))
-cost   = sizeMb * durationHours * base_rate_per_mb_hour
-finalCost = ceil(cost)
+storageBytes = len(base64decode(ciphertext))
+storageMb    = max(min_charge_mb, ceil(storageBytes / 1048576))
+storageCost  = storageMb * durationHours * base_rate_per_mb_hour
+finalCost    = ceil(storageCost)
 ```
 
-- `min_charge_mb = 1` (hard floor) is **mandatory** for all storage operations.
+**Egress sizing and price (when `egress_rate_per_mb` > 0):**
+```
+transferBytes = octets in the successful GET /retrieve/{id} response body
+transferMb    = max(min_charge_mb, ceil(transferBytes / 1048576))
+egressCost    = ceil(transferMb * egress_rate_per_mb)
+```
+
+- `min_charge_mb` is **operator-configurable**. Implementations **SHOULD** publish their configured value in `GET /price` and `/.well-known/didbox-configuration`. A value of `1` is **RECOMMENDED** for standard blob storage; memory-backed or enterprise tiers **MAY** use a lower floor.
+- `storageBytes` and `transferBytes` measure different things. Egress billing MUST use `transferBytes`, not stored blob size.
 - `durationHours` MUST be a positive integer ≥ 1.
-- `egress_rate_per_mb` (default 0) **MAY** be charged on successful `GET /retrieve/{id}`. When the configured rate > 0, servers SHOULD return 402 before delivering large payloads (using the same pricing formula). Providers MAY choose to absorb egress costs (rate = 0) as a competitive or marketing decision.
-- The values returned by the authenticated `GET /price` **MUST** be used to compute the 402 challenge amount for that specific request.
-- A node **MAY** return different pricing based on the authenticated DID (e.g., volume discounts, partner tiers, or subscription plans). If differentiated pricing is used, the node MUST return the applicable rates in the authenticated `/price` response, and those returned values MUST be used for the subsequent paid operation.
+- `egress_rate_per_mb` (default 0) **MAY** be charged on successful `GET /retrieve/{id}`. When `billing_mode` is `micropayment` and the configured rate > 0, servers MUST return 402 before delivering the payload, using the egress formula above.
+- Providers MAY choose to absorb egress costs (`egress_rate_per_mb = 0`) as a competitive decision.
+- When `billing_mode` is `micropayment`, the values returned by `GET /price` **MUST** be used to compute the 402 challenge amount for that specific request.
+- **`pricing_mode`:** Nodes advertise `"public"` (default) or `"authenticated"` in discovery. When `"public"`, `GET /price` works without DID headers. When `"authenticated"`, unauthenticated `GET /price` returns `401`, and the authenticated rates MUST be used for subsequent 402 challenges.
+- A node **MAY** return different pricing based on the authenticated DID when `pricing_mode` is `"authenticated"` (e.g., volume discounts, partner tiers). Those returned values MUST be used for the subsequent paid operation.
+
+### 4.6 Entitlement Billing (Enterprise Internal — Phase 1)
+
+**Trust model:** Entitlement nodes trade permissionless micropayment for **org-governed access**. Agent identity and E2EE remain client-driven (§1.1); storage **allocation** is gated by operator-issued secrets. This profile is intended for **private / enterprise** deployments, not public commodity nodes.
+
+**Phase 1 limitation:** Entitlement API keys are **org-wide bearer credentials**. They are **not** bound to a specific agent DID — any caller with a valid key and any valid DID signature may consume org quota. Per-DID scoping is deferred to Phase 2 capability tokens (see FUTURE.md).
+
+When `billing_mode` is `"entitlement"`, nodes **MUST NOT** issue 402 challenges for billable operations. Instead:
+
+1. **Discovery** MUST advertise:
+   - `billing_mode: "entitlement"`
+   - `supported_rails: []`
+   - `entitlement` object with `methods`, `header`, and `key_format`
+
+2. **Client request** MUST include DID auth headers **and** a valid entitlement credential on the advertised header (default: `X-DIDBOX-Entitlement`).
+
+3. **API key format (Phase 1):** `dbx_ent_<id>.<secret>`
+   - `<secret>` MUST be ≥128 bits of cryptographically random entropy.
+   - Servers MUST store only `SHA-256(secret)` per `<id>` in configuration (format: `ENTITLEMENT_KEY_HASHES="id:sha256hex,id2:sha256hex"`). Raw secrets MUST NOT appear in logs, discovery, persistent storage, or source control.
+   - Servers MUST compare hashes in constant time.
+   - Implementations MUST NOT log the entitlement header or any substring of `<secret>`.
+   - Operators MUST rotate keys by provisioning a new `<id>.<secret>`, distributing it, then revoking the old hash. Overlap windows (multiple active `<id>` entries) are RECOMMENDED for zero-downtime rotation. All replicas in a fleet MUST share identical hash configuration.
+
+4. **Failure responses:**
+   - Missing or invalid entitlement → `403 Forbidden` with `code: "ENTITLEMENT_REQUIRED"` (MUST).
+   - DID authentication failures MUST still return `401` before entitlement is evaluated.
+   - Clients MUST NOT interpret 402 on entitlement nodes as a payment challenge.
+
+5. **Egress on entitlement nodes:** When `egress_rate_per_mb` > 0, a valid entitlement credential on the retrieve request satisfies egress billing (no 402). `/price` egress values are informational for chargeback only.
+
+6. **Quota (Phase 1):** The protocol does not define per-key quotas. Operators SHOULD enforce limits out-of-band (ingress, disk caps, WAF) until Phase 2 quota accounting (see FUTURE.md).
+
+7. **Success receipts** on billable operations MUST include:
+   ```json
+   { "amountPaid": "0", "currency": "none", "rail": "entitlement" }
+   ```
+
+8. **`GET /price`** MAY still return rate cards for internal chargeback reporting; those values are informational only and MUST NOT trigger 402 on entitlement nodes.
+
+**Conformance:** Entitlement behavior is validated by a separate **enterprise-internal** profile (§10.1). Micropayment conformance remains unchanged.
 
 ---
 
@@ -152,8 +212,10 @@ Compliant nodes MUST use the following standardized error codes for the core con
 **Core Normative Error Codes:**
 - `400 Bad Request`: Malformed request body, invalid `durationHours`, or other validation errors.
 - `401 Unauthorized`: Missing or invalid DID signature/timestamp.
-- `402 Payment Required`: Missing or invalid payment proof.
-- `403 Forbidden`: Authenticated DID lacks permission for the resource.
+- `402 Payment Required`: Missing or invalid payment proof (micropayment mode only).
+- `403 Forbidden`: Request denied after successful DID authentication. Use `code` to distinguish:
+  - `ENTITLEMENT_REQUIRED` — missing or invalid org entitlement credential (entitlement mode billable operations).
+  - `ACCESS_DENIED` — authenticated DID lacks permission for the specific resource (e.g. retrieve ACL).
 - `404 Not Found`: Resource does not exist (or access denied for privacy reasons).
 - `410 Gone`: Resource lease has expired.
 - `413 Payload Too Large`: Payload exceeds node limits (SHOULD be 10MB+).
@@ -178,22 +240,27 @@ Creates a new storage lease.
 }
 ```
 **Ciphertext & Size Rules:**
-- `ciphertext` MUST be a base64-encoded string of the client-encrypted bytes.
-- `sizeBytes` reported in responses and used for pricing is the decoded byte length (or the encoded string length for simplicity — servers MUST document their choice).
-- `POST /store` measures size on the provided `ciphertext` value as UTF-8 bytes for the JSON string length limit.
+- `ciphertext` MUST be a base64-encoded string of the client-encrypted bytes. Invalid base64 MUST be rejected with `400`.
+- `sizeBytes` reported in responses and used for storage pricing is the decoded byte length of `ciphertext`.
+- `max_payload_bytes` in discovery applies to decoded `storageBytes`.
 - **Response (200 OK):**
 ```json
 {
   "storageId": "uuid",
   "expiresAt": "ISO8601-Timestamp",
   "sizeBytes": 1234,
+  "amountPaid": "1000",
+  "currency": "sats",
+  "rail": "L402",
   "pricePaidSatoshis": 1000
 }
 ```
+- `amountPaid`, `currency`, and `rail` are normative. `pricePaidSatoshis` is a deprecated alias when `rail` is `L402`.
 
 #### `GET /retrieve/{id}`
 Retrieves box content.
 - **Headers:** `X-Inbox-Alias` (REQUIRED if caller is a recipient of a scoped inbox).
+- When `billing_mode` is `micropayment` and `egress_rate_per_mb` > 0, servers MUST issue a 402 challenge based on `transferBytes` before returning the payload. On entitlement nodes, a valid entitlement credential satisfies egress billing (§4.6).
 - **Response (200 OK):**
 ```json
 {
@@ -201,10 +268,28 @@ Retrieves box content.
 }
 ```
 
+#### `DELETE /store/{id}`
+Allows the lease owner to purge a box before lease expiry.
+- Caller MUST be the owner (verified via salted owner hash).
+- Returns `204 No Content` on success.
+- Returns `404` if not found or caller is not the owner (privacy-preserving).
+- Returns `410` if the lease has already expired.
+- **No rebate** is issued for unused lease time.
+
 #### `POST /extend/{id}`
 Extends an existing lease.
 - **Request Body:** `{ "additionalHours": 24 }`
-- **Response (200 OK):** `{ "storageId": "uuid", "newExpiresAt": "ISO8601-Timestamp", "additionalCostSatoshis": 500 }`
+- **Response (200 OK):**
+```json
+{
+  "storageId": "uuid",
+  "newExpiresAt": "ISO8601-Timestamp",
+  "amountPaid": "500",
+  "currency": "sats",
+  "rail": "L402",
+  "additionalCostSatoshis": 500
+}
+```
 
 ### 5.3 Economics & Discovery
 
@@ -253,7 +338,7 @@ Lists active boxes sent to the authenticated DID in the specified alias.
 #### `POST /inboxes`
 Provisions a new named inbox for the authenticated DID. Requires a one-time creation fee.
 - **Request Body:** `{ "alias": "project-x" }`
-- **Response (200 OK):** `{ "alias": "project-x", "hashedId": "...", "feePaid": 1000 }`
+- **Response (200 OK):** `{ "alias": "project-x", "hashedId": "...", "amountPaid": "1000", "currency": "sats", "rail": "L402", "feePaid": 1000 }`
 
 #### `GET /inboxes`
 Lists all named inboxes provisioned by the authenticated DID (no payment required for listing).
@@ -277,79 +362,17 @@ Lists all named inboxes provisioned by the authenticated DID (no payment require
 **Note on Administrative Endpoints:**
 The reference implementation exposes `GET /janitor/purge` (protected by `X-Admin-Token` or `DEV_MODE`). This endpoint is **not** part of the public protocol and implementers may implement automatic purge via cron, Durable Object alarms, or other background mechanisms instead.
 
-### 5.5 Migration Authorization (Sovereign Mobility Phase 1)
+### 5.5 Cross-Node Data Movement (Client-Only)
 
-Starting in v0.7.0, nodes **MUST** implement the `POST /migrate/{id}/authorize` endpoint to support client-orchestrated data migration between nodes.
+Moving a box between nodes is a **client-orchestrated** activity. The protocol defines no server-side migration endpoints.
 
-This endpoint allows an authenticated owner to obtain a signed **Migration Authorization** (also called a Migration Proof) that proves:
-- They are the owner of a specific storage object
-- The current size and ciphertext hash of the object
-- How many hours of lease time remain
+**Normative client flow:**
+1. `GET /retrieve/{id}` on the source node (owner or authorized recipient).
+2. `POST /store` on the destination node with the retrieved ciphertext.
 
-The client is responsible for retrieving the ciphertext from the source node and re-storing it on a destination node. In Phase 1, destination nodes **do not** inspect or require the Migration Authorization.
+This preserves privacy: no cross-node authorization artifacts, linkable proofs, or destination-node awareness of the source.
 
-#### Request
-
-```
-POST /migrate/{storage_id}/authorize
-Authorization: (via X-DID + X-DID-Signature headers)
-```
-
-The caller **MUST** be the owner of the storage object (verified via salted identity hash).
-
-#### Response (200 OK)
-
-Returns a `MigrationAuthorization` object:
-
-```json
-{
-  "version": 1,
-  "original_storage_id": "abc123...",
-  "owner_did": "did:key:z6Mk...",
-  "size_bytes": 1048576,
-  "ciphertext_hash": "sha256:abcdef...",
-  "remaining_lease_hours": 47,
-  "issued_at": "2026-05-15T12:00:00.000Z",
-  "expires_at": "2026-05-17T12:00:00.000Z",
-  "source_node": "https://node.example.com",
-  "issuance_nonce": "uuid-string",
-  "signature": "hex-encoded-ed25519-signature"
-}
-```
-
-**Field Definitions:**
-
-| Field                    | Type   | Required | Description |
-|--------------------------|--------|----------|-------------|
-| `version`                | number | Yes      | Migration Authorization format version (currently 1) |
-| `original_storage_id`    | string | Yes      | The storage ID on the source node |
-| `owner_did`              | string | Yes      | The DID of the owner (raw, as this is a transferable proof) |
-| `size_bytes`             | number | Yes      | Exact size of the ciphertext blob |
-| `ciphertext_hash`        | string | Yes      | `sha256:` prefixed hex hash of the ciphertext |
-| `remaining_lease_hours`  | number | Yes      | Ceiling of remaining lease time (minimum 1) |
-| `issued_at`              | string | Yes      | ISO8601 timestamp when the proof was issued |
-| `expires_at`             | string | Yes      | ISO8601 timestamp when the proof itself expires (≤ original lease expiry, max 48h) |
-| `source_node`            | string | Yes      | Origin URL of the issuing node |
-| `issuance_nonce`         | string | Yes      | Unique nonce for this authorization |
-| `signature`              | string | Yes      | Hex Ed25519 signature over the JCS-canonicalized object (without `signature` field) |
-
-**Signing Requirements (Normative):**
-- The node **MUST** sign using its dedicated Ed25519 key published in `node_identity`.
-- The object to be signed is the `MigrationAuthorization` **without** the `signature` field.
-- Canonicalization **MUST** use JSON Canonicalization Scheme (JCS / RFC 8785).
-- The canonical JSON is then SHA-256 hashed; the hash is signed with Ed25519.
-- The resulting signature is hex-encoded.
-
-**Server Rules:**
-- The endpoint **MUST** require valid DID authentication.
-- The server **MUST** verify that the authenticated DID owns the storage object.
-- The server **MUST** reject requests for expired leases (return 410).
-- `remaining_lease_hours` **MUST** be calculated as `max(1, ceil(remaining_ms / (1000*60*60)))`.
-- The proof's `expires_at` **SHOULD NOT** exceed the original lease expiry or 48 hours from issuance.
-- The `ciphertext_hash` **MUST** be computed from the current stored blob (on-the-fly is acceptable in Phase 1).
-
-**Client Usage:**
-Clients use this proof for verifiable migration via `getMigrationProof()` and `migrate()` in the official SDKs. The proof is third-party verifiable by any party that knows the node's `node_identity.did`.
+SDKs **MAY** provide a `migrate()` convenience wrapper around the two steps above.
 
 ---
 
@@ -376,8 +399,10 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
 
 ```json
 {
-  "protocol_version": "0.7.0",
-  "supported_rails": ["L402", "x402"],   // MAY be a subset (e.g. ["x402"])
+  "protocol_version": "0.9.1",
+  "billing_mode": "micropayment",
+  "supported_rails": ["L402", "x402"],
+  "pricing_mode": "public",
   "limits": {
     "max_payload_bytes": 10485760,
     "max_lease_hours": 8760,
@@ -387,11 +412,11 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
     "store": "/store",
     "retrieve": "/retrieve/{id}",
     "extend": "/extend/{id}",
+    "delete": "/store/{id}",
     "inbox": "/inbox/{alias}",
     "inboxes": "/inboxes",
     "leases": "/leases",
-    "price": "/price",
-    "migrate_authorize": "/migrate/{id}/authorize"
+    "price": "/price"
   },
   "node_identity": {
     "did": "did:key:z6Mk...",
@@ -400,8 +425,30 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
 }
 ```
 
+**Entitlement node example:**
+```json
+{
+  "protocol_version": "0.9.1",
+  "billing_mode": "entitlement",
+  "supported_rails": [],
+  "pricing_mode": "authenticated",
+  "entitlement": {
+    "methods": ["api_key"],
+    "header": "X-DIDBOX-Entitlement",
+    "key_format": "dbx_ent_<id>.<secret>"
+  },
+  "limits": { "max_payload_bytes": 10485760, "max_lease_hours": 8760, "min_charge_mb": 1 },
+  "endpoints": { "store": "/store", "retrieve": "/retrieve/{id}", "extend": "/extend/{id}", "delete": "/store/{id}", "inbox": "/inbox/{alias}", "inboxes": "/inboxes", "leases": "/leases", "price": "/price" }
+}
+```
+
 **Field and Naming Rules:**
 - `protocol_version` (string) — the exact protocol version the node implements.
+- `billing_mode` (string) — `"micropayment"` (default) or `"entitlement"`.
+- `pricing_mode` (string) — `"public"` (default) or `"authenticated"`.
+- `entitlement` (object) — REQUIRED when `billing_mode` is `"entitlement"`; MUST be omitted otherwise.
+- `node_identity` (object) — OPTIONAL. Clients MUST NOT require it.
+- `limits.min_charge_mb` reflects the operator's configured billing floor (RECOMMENDED default: `1`).
 - All fields in this response and in `GET /price` use `snake_case`.
 - All other API request/response bodies use `camelCase`.
 - Clients MUST ignore unknown fields.
@@ -409,14 +456,13 @@ The `/.well-known/didbox-configuration` endpoint **MUST** be publicly accessible
 
 A machine-readable **OpenAPI 3.1** description of the full protocol is available at `docs/didbox402-openapi.yaml`. Implementers are strongly encouraged to use it for client and server generation.
 
-### 7.2 Node Identity
+### 7.2 Node Identity (Optional)
 
-Starting with protocol version 0.7.0, every compliant node **MUST** publish a node identity.
+Nodes **MAY** publish an optional `node_identity` in discovery for operator reputation, future extensions, or signed operational attestations.
 
-- The identity **MUST** be expressed as a `did:key` (Ed25519 only).
-- Nodes **MUST** use a dedicated Ed25519 keypair for signing protocol artifacts (such as Migration Authorizations). This signing key **SHOULD** be kept separate from any administrative or operational keys.
-- **Fleet / Multi-Node Deployments:** Operators running multiple nodes (HA, multi-region, load-balanced) **MAY** use the same Ed25519 signing key across all nodes in a fleet. This allows any node to issue verifiable Migration Proofs for leases that originated on other nodes in the same fleet. Alternatively, operators MAY use per-node keys; in this case clients are responsible for tracking the `source_node` field in Migration Proofs.
-- The `node_identity` object **MUST** be included in the `/.well-known/didbox-configuration` response.
+- When present, the identity **MUST** be expressed as a `did:key` (Ed25519 only).
+- The signing key **SHOULD** be kept separate from administrative or operational keys.
+- Clients **MUST** treat `node_identity` as optional and MUST NOT require it for core storage operations.
 
 **Node Identity Object:**
 
@@ -429,12 +475,6 @@ Starting with protocol version 0.7.0, every compliant node **MUST** publish a no
 
 - `did`: The node's Decentralized Identifier in `did:key` format.
 - `public_key`: The base58btc multibase encoding of the raw 32-byte Ed25519 public key (same encoding used in the DID).
-
-**Key Management:**
-- The signing key must be protected with equivalent security to payment provider secrets.
-- Key rotation is permitted by publishing a new `node_identity`. Previously issued Migration Authorizations remain valid until their natural expiry.
-
-This identity enables third-party verification of protocol artifacts signed by the node.
 
 ---
 
@@ -460,6 +500,9 @@ The following requirements apply to all clients and SDKs. Failure to implement t
 - **Freshness and Replay Protection:** Every request MUST use a fresh `X-DID-Timestamp` (within the 5-minute drift window) and a unique signature. Clients MUST NOT reuse signatures.
 - **Inbox Alias Handling (as recipient):** When retrieving or listing items sent to a non-default `inboxAlias`, the client MUST supply the `X-Inbox-Alias` header (or use the alias in the URL path). Owners retrieving their own items may omit the header.
 - **Ciphertext Encoding:** Clients MUST base64-encode the client-encrypted payload before sending in `POST /store`.
+- **Discovery per endpoint:** Clients MUST fetch `/.well-known/didbox-configuration` for each node base URL and treat omitted `billing_mode` as `micropayment`.
+- **Entitlement mode:** When `billing_mode` is `entitlement`, clients MUST attach a valid credential on the header advertised in `entitlement.header` (default `X-DIDBOX-Entitlement`) for every billable operation. Clients MUST NOT invoke micropayment settlement (402 handlers) on entitlement nodes.
+- **Micropayment mode:** When `billing_mode` is `micropayment`, clients MUST use only rails listed in `supported_rails` when settling 402 challenges.
 
 ### 9.2 Recommended Client SDK Capabilities
 
@@ -469,13 +512,14 @@ Official and third-party SDKs **SHOULD** provide ergonomic abstractions for thes
 
 - Automatic 402 challenge handling and payment negotiation (with pluggable wallet / rail providers for L402 and x402), including retry after successful settlement.
 - High-level `DidBoxClient` (or equivalent) that encapsulates signing, discovery, and common operations.
-- Migration orchestration helpers (`getMigrationProof`, `migrate`, `DidBoxClient.forNode` for cross-node operations).
+- Cross-node helpers (`migrate`, `DidBoxClient.forNode`) that wrap client-only retrieve + store flows.
 - Lease lifecycle management (monitoring expiry, automatic or assisted extension, cost estimation using `/price`).
 - Client-side resilience patterns, including conversation/thread mirroring into per-DID archives and reconciliation helpers (see the design document on Deletion Semantics and Client-Side Resilience).
 - Group communication conveniences (helpers for the per-DID signing + shared symmetric key pattern) without requiring server changes.
 - Clock drift detection and recovery using server `Date` headers.
 - Safe key management utilities and DID handling (while keeping all private key material client-side).
-- Discovery client that fetches and caches `/.well-known/didbox-configuration` and surfaces supported rails and limits.
+- Discovery client that fetches and caches `/.well-known/didbox-configuration` and surfaces `billing_mode`, supported rails, and limits. SDKs SHOULD expose cache invalidation when node configuration may have changed.
+- Entitlement credential injection per node URL (separate from agent DID keys), including cross-node `migrate()` with `destinationEntitlementKey` when the destination uses entitlement billing.
 
 The reference packages (`@didbox/sdk-core`, `@didbox/sdk-crypto`, `@didbox/sdk-payments`) aim to implement the above recommendations. Application developers and agent frameworks are encouraged to build on these rather than re-implementing the low-level protocol details.
 
@@ -488,17 +532,28 @@ Implementers using the high-level `DidBoxClient` from `@didbox/sdk-core` inherit
 Implementations MUST pass the official **[didbox-conformance](packages/conformance)** suite (version matching the `protocol_version` advertised in discovery).
 
 ### 10.1 Verification Gauntlet
-Compliant nodes and the conformance suite MUST validate at minimum:
 
-1. **Economic Integrity:** Rejects without payment, enforces 1MB min charge, and uses `/price` values to compute challenge amounts.
-2. **Cryptographic Isolation:** No cross-alias inbox leakage (different `inboxAlias` values produce isolated views).
-3. **Temporal Security:** Enforces ±5m drift window and returns a `Date` header on every response.
-4. **Replay Resistance:** Rejects used DID signatures **and** used payment proofs (both L402 and x402).
-5. **Privacy Invariant:** Zero raw DIDs ever appear in persistent storage (`storage_records`, `inboxes`, `nonces`, `used_payments`) or in list responses.
-6. **Ephemerality:** Automatic background purge of expired leases, ciphertext blobs, and expired nonces (≤ 1 hour granularity recommended).
-7. **Discovery & Transport:** Public `/.well-known/didbox-configuration` returns the exact schema defined in 7.1; all responses include a valid `Date` header.
+Conformance is profile-based. All nodes MUST pass the **core** gauntlet. Additional items apply based on advertised `billing_mode`.
 
-The conformance suite **MUST** exercise real Ed25519 signatures (via `@didbox/sdk-crypto` or equivalent), dual-rail payment flows (including replay rejection), inbox isolation across multiple DIDs/aliases, and automatic purge behavior.
+**Core (all nodes):**
+1. **Cryptographic Isolation:** No cross-alias inbox leakage (different `inboxAlias` values produce isolated views).
+2. **Temporal Security:** Enforces ±5m drift window and returns a `Date` header on every response.
+3. **Replay Resistance (DID):** Rejects reused DID signatures within the drift window.
+4. **Privacy Invariant:** Zero raw DIDs ever appear in persistent storage (`storage_records`, `inboxes`, `nonces`, `used_payments`) or in list responses.
+5. **Ephemerality:** Automatic background purge of expired leases, ciphertext blobs, and expired nonces (≤ 1 hour granularity recommended).
+6. **Discovery & Transport:** Public `/.well-known/didbox-configuration` returns the schema defined in §7.1 (including `billing_mode`); all responses include a valid `Date` header.
+
+**Micropayment profile** (`billing_mode: micropayment`):
+7. **Economic Integrity:** Rejects without payment via 402, applies `min_charge_mb`, uses `storageBytes` / `transferBytes`, and uses `/price` values for challenge amounts.
+8. **Payment Replay Resistance:** Rejects reused L402 and x402 proofs.
+9. **Billing guard:** Presenting only an entitlement header (without payment) does not bypass 402.
+
+**Enterprise-internal profile** (`billing_mode: entitlement`):
+7. **Entitlement gate:** Billable operations without valid entitlement return `403` with `code: ENTITLEMENT_REQUIRED` — never `402`.
+8. **Empty rails:** `supported_rails` is `[]`; discovery includes `entitlement` object.
+9. **Entitlement receipts:** Successful billable operations return `{ amountPaid: "0", currency: "none", rail: "entitlement" }`.
+
+The conformance suite **MUST** exercise real Ed25519 signatures (via `@didbox/sdk-crypto` or equivalent). Micropayment nodes MUST additionally pass rail-specific payment tests. Entitlement nodes MUST pass the enterprise-internal profile.
 
 **Reference:** The authoritative test cases live in `packages/server/src/__tests__/` and are progressively being ported into the published `@didbox/conformance` package. Implementers should run both the published CLI and the reference server test suite against their node.
 
@@ -508,6 +563,8 @@ Implementations **MUST** align with the threat model documented in `docs/threat-
 - `SERVICE_SALT` MUST be a high-entropy secret (≥128 bits, cryptographically random). It MUST NOT use the default values `"test_salt"` or `"default_salt"` in production. Nodes SHOULD refuse to start or log a loud warning if `SERVICE_SALT` matches a well-known default in non-DEV_MODE. The salt MUST NOT be committed to source control.
 - **Rotation:** `SERVICE_SALT` is considered effectively immutable for the lifetime of a service. Rotating it would invalidate all existing `owner_hash` and `recipient_hash` values, breaking historical inboxes and lease queries. There is currently no supported rotation mechanism. Operators SHOULD treat the salt as a long-lived secret. Future versions of the protocol may introduce versioning or migration support for salt rotation.
 - Raw `recipientDid` values received in `POST /store` bodies MUST NOT be logged or persisted beyond the immediate hash computation.
+- When `billing_mode` is `entitlement`, nodes MUST configure at least one entry in `ENTITLEMENT_KEY_HASHES` before serving billable traffic in non-`DEV_MODE` environments. Nodes SHOULD refuse to start or return `500` with a clear configuration error if entitlement mode is enabled with an empty hash list.
+- Entitlement secrets MUST meet the entropy requirements in §4.6. The entitlement header MUST NOT appear in application or access logs.
 - The janitor/admin purge mechanism (if exposed via HTTP) MUST be protected by a strong secret or DID-based ACL.
 
 ---
@@ -516,17 +573,9 @@ Implementations **MUST** align with the threat model documented in `docs/threat-
 
 The following areas are planned for future versions of the protocol:
 
-### 11.1 Sovereign Mobility Phase 2+
+### 11.1 Cross-Node Movement
 
-Phase 1 (client-orchestrated migration with verifiable Migration Proofs) was completed in v0.7.0.
-
-Future phases may include:
-- Destination nodes accepting and acting on Migration Authorizations (e.g., extending leases without full re-upload)
-- Cross-node lease transfer without client round-tripping the ciphertext
-- Reputation / capability signaling for high-quality destination nodes
-
-The original Phase 1 design document remains available at:
-→ [docs/designs/v070-sovereign-mobility-phase1.md](/docs/designs/v070-sovereign-mobility-phase1.md)
+Cross-node data movement is client-only (§5.5). Server-signed migration artifacts were removed in v0.8.0. Revisit only if implementors request verifiable portability with a concrete privacy model.
 
 ### 11.2 Group Communication (Exploratory)
 
@@ -544,5 +593,5 @@ This is documented in:
 This remains an area for future protocol extensions or higher-level SDK support.
 
 ---
-**Version:** 0.7.0  
+**Version:** 0.9.1  
 **Status:** Open Protocol Specification

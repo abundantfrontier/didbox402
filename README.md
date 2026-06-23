@@ -6,7 +6,7 @@ didbox402 is an agent-native open protocol for ephemeral, paid, and verifiable s
 
 ---
 
-## Status: v0.7.0 (Sovereign Mobility + Real Rails)
+## Status: v0.8.0 (Spec Cleanup + Privacy Simplification)
 
 This repository serves as the definitive specification and reference ecosystem for the didbox402 standard.
 
@@ -34,7 +34,7 @@ Commercial providers build production services on top of this protocol, offering
 - **`packages/sdk-*`**: Reusable TypeScript modules for agents and clients.
 - **`docs/`**: Comprehensive implementer guides and architectural documentation.
 
-## Quick Start (v0.7.0)
+## Quick Start (v0.8.0)
 
 ### 1. Install Dependencies
 ```bash
@@ -55,9 +55,7 @@ cd packages/server && npx wrangler dev
 ## Documentation
 - **[Implementer's Guide](docs/implementer-guide.html)**: Building your own compliant node.
 - **[Formal Specification](PROTOCOL.md)**: The definitive rulebook.
-- **[Sovereign Mobility Design](docs/designs/v070-sovereign-mobility-phase1.md)**: Client-driven migration (v0.7.0).
-- **[Client SDK Migration Design](docs/designs/v070-client-sdk-migration.md)**: `getMigrationProof()` and `migrate()` design.
-- **[Migration Implementation Plan](docs/designs/v070-client-sdk-migration-implementation-plan.md)**: Detailed execution record.
+- **Cross-node movement**: Client-only (`retrieve` on source + `store` on destination). See PROTOCOL.md §5.5.
 - **[Group Communication Design](docs/designs/group-communication-design.md)**: Client-side pattern for secure group chat / shared state using individual DIDs + shared encryption keys (no server changes required).
 - **[Paid Content Distribution](docs/designs/paid-content-distribution-pattern.md)**: Off-protocol payments with private didbox402 delivery for independent journalism, research, and professional content.
 - **[Extension Points](docs/extensions.html)**: How to customize and commercialize.

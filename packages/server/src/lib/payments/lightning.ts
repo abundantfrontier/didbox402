@@ -1,4 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '../bytes';
 
 export interface LightningInvoice {
   paymentHash: string;
@@ -17,7 +18,7 @@ export class MockLightningProvider implements LightningProvider {
   async createInvoice(amountSats: number, description: string): Promise<LightningInvoice> {
     // Generate a random payment hash
     const preimage = crypto.getRandomValues(new Uint8Array(32));
-    const paymentHash = Buffer.from(sha256(preimage)).toString('hex');
+    const paymentHash = bytesToHex(sha256(preimage));
     const bolt11 = `lnbc${amountSats}n1p...mock_${paymentHash}`;
     
     return { paymentHash, bolt11 };

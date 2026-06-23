@@ -1,6 +1,6 @@
 # Implementation Plan: Client SDK for Sovereign Mobility – Phase 1 (v0.7.0)
 
-**Status:** Implemented (v0.7.0)  
+**Status:** **Superseded / Withdrawn** (v0.8.0 removed server migration proofs)
 **Related Documents:**
 - [v0.7.0 Sovereign Mobility – Phase 1 Design](v070-sovereign-mobility-phase1.md)
 - [Client SDK Design for Sovereign Mobility – Phase 1](v070-client-sdk-migration.md)

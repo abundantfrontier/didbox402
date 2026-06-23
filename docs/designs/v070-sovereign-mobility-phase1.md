@@ -1,8 +1,9 @@
 # Design: Sovereign Mobility – Phase 1 (Minimal Migration)
 
-**Status:** Finalized for Implementation  
-**Target Release:** v0.7.0  
+**Status:** **Superseded / Withdrawn** (removed in protocol v0.8.0)  
+**Target Release:** v0.7.0 (shipped, then removed)  
 **Date:** 2026-05-14  
+**Superseded by:** PROTOCOL.md §5.5 — client-only cross-node movement (`retrieve` + `store`)
 **Author:** Grok (based on team discussion + panel review)
 
 ---

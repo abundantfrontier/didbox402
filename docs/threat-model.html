@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.7.0) | Threat Model</title>
+    <title>didbox402 (v0.9.1) | Threat Model</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -29,7 +29,7 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>The Shield: Threat Model <span style="font-size: 0.5em; opacity: 0.7;">v0.7.0 (Normative Reference)</span></h1>
+        <h1>The Shield: Threat Model <span style="font-size: 0.5em; opacity: 0.7;">v0.9.1 (Normative Reference)</span></h1>
 
         <p>Honesty starts with admitting what <code>didbox402</code> <em>cannot</em> protect. While we aim for maximum privacy, the physical reality of hosting and networking creates metadata "exhaust."</p>
 
@@ -53,7 +53,12 @@
             <tr>
                 <td>Funds (Sats/USDC)</td>
                 <td>Wallet-Side</td>
-                <td>402 Challenge-Response Handshake</td>
+                <td>402 Challenge-Response Handshake (micropayment nodes)</td>
+            </tr>
+            <tr>
+                <td>Org Entitlement (API Keys)</td>
+                <td>Operator / Enterprise Perimeter</td>
+                <td>SHA-256 hashed secrets, private network deployment, rotation</td>
             </tr>
         </table>
 
@@ -92,10 +97,18 @@
         </div>
 
         <div class="threat-category">
-            <h3>Sovereign Mobility (v0.7.0+)</h3>
-            <p><strong>Threat:</strong> A malicious source node issues fake Migration Proofs or a node publishes a fraudulent <code>node_identity</code>.</p>
+            <h3>Entitlement Billing (v0.9.0+)</h3>
+            <p><strong>Threat:</strong> Exfiltration of <code>X-DIDBOX-Entitlement</code> API keys allows any party to pair the key with an arbitrary agent DID and consume org storage quota. Keys are org-wide bearer credentials in Phase 1 (not bound per DID).</p>
             <div class="mitigation">
-                Mitigation: Migration Proofs are only useful for the legitimate owner. Destination nodes are not required to trust them in Phase 1. Node identity is published in discovery and can be validated by clients.
+                Mitigation: Deploy entitlement nodes on private networks; use ≥128-bit CSPRNG secrets; rotate keys with overlap windows; never log entitlement headers; replicate hash config consistently across HA replicas. Phase 2 capability tokens with per-DID <code>sub</code> claims reduce blast radius.
+            </div>
+        </div>
+
+        <div class="threat-category">
+            <h3>Dual Billing Mode Confusion</h3>
+            <p><strong>Threat:</strong> Clients mis-handle nodes after <code>billing_mode</code> changes, or attach entitlement headers to public micropayment nodes expecting free access.</p>
+            <div class="mitigation">
+                Mitigation: Clients MUST read discovery per URL; micropayment nodes ignore entitlement headers and still require 402 settlement. Entitlement nodes MUST NOT return 402 for billable operations.
             </div>
         </div>
 
