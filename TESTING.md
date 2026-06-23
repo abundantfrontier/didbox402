@@ -48,16 +48,21 @@ Because of this, **many tests may fail intermittently** even when the underlying
 
 ```bash
 # Against local dev server
-cd packages/server && npx wrangler dev
+cd packages/server && npm run dev
 
-# In another terminal
-npx @didbox/conformance --url http://localhost:8787 --did "did:key:..." --signer ./path/to/signer.js
+# In another terminal — micropayment profile (default)
+npx didbox-conformance --url http://localhost:8787 --profile micropayment
+
+# Enterprise-internal profile
+npx didbox-conformance --url http://localhost:8787 \
+  --profile enterprise-internal \
+  --entitlement-url http://localhost:8788
 ```
 
-Or using the raw Vitest runner:
+Or using the monorepo Vitest runner:
 
 ```bash
-npx vitest run packages/conformance/src/server
+npm test
 ```
 
 ### Real Payment Provider Mode

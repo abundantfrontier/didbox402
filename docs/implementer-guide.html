@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>didbox402 (v0.7.0) | Implementer's Guide</title>
+    <title>didbox402 (v0.9.1) | Implementer's Guide</title>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #f0f2f5; }
         .container { background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 8px solid #007aff; }
@@ -27,10 +27,9 @@
 <body>
     <div class="container">
         <a href="index.html" class="back-link">← Index</a>
-        <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.7.0</span></h1>
-        <p><strong>New in v0.6.2:</strong> Official OpenAPI 3.1 spec available at <code>docs/didbox402-openapi.yaml</code>. (v0.7.0 adds Migration Proof + Node Identity support.)</p>
-        <p><strong>Design for v0.7.0 – Sovereign Mobility (Phase 1):</strong><br>
-           <a href="designs/v070-sovereign-mobility-phase1.md">Minimal Migration Design Document</a> (reviewed & revised after panel review)</p>
+        <h1>Implementer's Guide <span style="font-size: 0.5em; opacity: 0.7;">v0.9.1</span></h1>
+        <p><strong>Normative spec:</strong> <a href="../PROTOCOL.md">PROTOCOL.md v0.9.1</a> · <code>docs/didbox402-openapi.yaml</code> · <code>docs/threat-model.html</code></p>
+        <p><strong>New in v0.9.x:</strong> Per-node <code>billing_mode</code> (<code>micropayment</code> | <code>entitlement</code>), enterprise API-key billing for internal installs, profile-based conformance gauntlets, and client-only cross-node movement (server migration removed in v0.8.0).</p>
 
         <p>This guide provides a comprehensive technical blueprint for teams building <strong>didbox402-compatible</strong> servers or clients. It outlines the mandatory invariants required to claim protocol compliance.</p>
 
@@ -48,7 +47,8 @@
             <ul>
                 <li><strong>DID Authentication:</strong> Identity is proven per-request via <code>X-DID</code> and a signature.</li>
                 <li><strong>Temporal Binding:</strong> Every request is timestamped (<code>X-DID-Timestamp</code>) and bound to a 5-minute validity window.</li>
-                <li><strong>Dual-Rail Economics:</strong> Nodes must support at least one standard rail (L402 or x402) for lease payments.</li>
+                <li><strong>Billing Mode:</strong> Each node advertises <code>billing_mode</code> in discovery — <code>micropayment</code> (402 + L402/x402) or <code>entitlement</code> (org API key, no 402).</li>
+                <li><strong>Micropayment Rails:</strong> Public nodes MUST support at least one advertised rail (L402 or x402) when <code>billing_mode</code> is <code>micropayment</code>.</li>
                 <li><strong>Salted Privacy:</strong> All internal indexes use <code>SHA256(DID + Alias + Secret_Salt)</code> to ensure pseudonymity.</li>
             </ul>
         </section>
@@ -62,10 +62,21 @@
                 <li>Enforce the ±5 minute drift window for timestamps.</li>
             </ul>
 
-            <h3>The 402 Handshake</h3>
-            <p>When a payment is required (Store/Extend), the server MUST return a <code>402</code> with the appropriate challenge headers:</p>
+            <h3>The 402 Handshake (Micropayment Nodes Only)</h3>
+            <p>When <code>billing_mode</code> is <code>micropayment</code>, billable operations without valid payment proof MUST return <code>402</code> with the appropriate challenge headers. Challenge headers are normative; the JSON body is optional.</p>
             <pre><code>WWW-Authenticate: L402 macaroon="...", invoice="..."
 PAYMENT-REQUIRED: {base64_requirements}</code></pre>
+
+            <h3>Entitlement Billing (Enterprise Internal — Phase 1)</h3>
+            <p>When <code>billing_mode</code> is <code>entitlement</code>, nodes MUST NOT issue 402 challenges. Instead, billable operations require DID auth <strong>and</strong> a valid org API key on <code>X-DIDBOX-Entitlement</code> (format: <code>dbx_ent_&lt;id&gt;.&lt;secret&gt;</code>).</p>
+            <ul>
+                <li>Discovery MUST advertise <code>billing_mode: "entitlement"</code>, <code>supported_rails: []</code>, and an <code>entitlement</code> object (<code>methods</code>, <code>header</code>, <code>key_format</code>).</li>
+                <li>Store only <code>SHA-256(secret)</code> per key id in configuration — never persist or log raw secrets.</li>
+                <li>Missing or invalid entitlement → <code>403</code> with <code>code: "ENTITLEMENT_REQUIRED"</code>.</li>
+                <li>Success receipts: <code>{ "amountPaid": "0", "currency": "none", "rail": "entitlement" }</code>.</li>
+                <li>Phase 1 keys are <strong>org-wide bearer credentials</strong> (not bound to agent DID). Per-DID scoping is Phase 2 — see <a href="../FUTURE.md">FUTURE.md</a>.</li>
+            </ul>
+            <p>Reference production config: <code>packages/server/wrangler.entitlement.prod.example.toml</code>. Local dev: <code>npm run dev:entitlement</code> (port 8788).</p>
         </section>
 
         <section id="practical-examples">
@@ -154,63 +165,36 @@ async function storeData(ciphertext) {
 }</code></pre>
         </section>
 
-        <section id="migration">
-            <h2>9. Migrating Data Between Nodes (v0.7.0+)</h2>
+        <section id="cross-node">
+            <h2>9. Cross-Node Movement (Client-Only, v0.8.0+)</h2>
             <p>
-                didbox402 supports <strong>Sovereign Mobility</strong> — the ability for clients to move their data from one node to another in a verifiable way.
+                Cross-node data movement is <strong>client-only</strong>: <code>GET /retrieve</code> on the source node, then <code>POST /store</code> on the destination. Server-signed migration artifacts were removed in v0.8.0.
             </p>
 
-            <h3>Core Concepts</h3>
-            <ul>
-                <li>A <strong>Migration Proof</strong> (signed <code>MigrationAuthorization</code>) is obtained from the source node.</li>
-                <li>The client is responsible for downloading the data and re-uploading it to the destination.</li>
-                <li>In Phase 1, the destination node does not yet act on the Migration Proof (this comes in later phases).</li>
-            </ul>
-
-            <h3>Basic Migration using the SDK</h3>
+            <h3>SDK <code>migrate()</code> Helper</h3>
             <pre><code>import { DidBoxClient } from '@didbox/sdk-core';
 import { signRequest } from '@didbox/sdk-crypto';
 
 const client = new DidBoxClient({
   baseUrl: "https://source-node.didbox.com",
   did: MY_DID,
-  signRequest: (ts, method, path, body) => signRequest(MY_KEY, method, path, body, ts)
+  signRequest: (ts, method, path, body) => signRequest(MY_KEY, method, path, body, ts),
+  entitlementKey: "dbx_ent_...." // only if source uses entitlement billing
 });
 
-// Option 1: Get a Migration Proof (recommended low-level approach)
-const { authorization, verified } = await client.getMigrationProof("storage-abc123");
-
-if (!verified) {
-  console.error("Failed to verify migration proof");
-  return;
-}
-
-console.log("Migration Proof obtained. Remaining lease:", authorization.remaining_lease_hours, "hours");
-
-// Option 2: Use the basic migrate() helper (convenience)
 const result = await client.migrate("storage-abc123", {
   destinationUrl: "https://dest-node.didbox.com",
-  newDurationHours: 72
+  newDurationHours: 72,
+  destinationEntitlementKey: "dbx_ent_...." // if destination is entitlement
 });
 
-console.log("Migration complete. New storage ID:", result.newStorageId);</code></pre>
+console.log("New storage ID:", result.newStorageId);</code></pre>
 
-            <h3>Using a Client for a Different Node</h3>
-            <p>
-                If you need to obtain a Migration Proof from a node you are not primarily connected to:
-            </p>
-            <pre><code>const sourceClient = DidBoxClient.forNode("https://old-node.didbox.com", {
-  did: MY_DID,
-  signRequest: mySignFunction
-});
-
-const proof = await sourceClient.getMigrationProof(storageId);</code></pre>
-
-            <h3>Important Notes (Phase 1)</h3>
+            <h3>Important Notes</h3>
             <ul>
-                <li>The <code>migrate()</code> helper is intentionally basic. It does not yet present the Migration Proof to the destination node.</li>
-                <li>You are responsible for paying any egress fees on the source node.</li>
-                <li>Both source and destination nodes must be running v0.7.0+ for full functionality.</li>
+                <li>Clients MUST fetch discovery per node and branch on <code>billing_mode</code> (micropayment vs entitlement).</li>
+                <li>Micropayment source nodes may charge egress on retrieve; entitlement nodes satisfy egress via the entitlement credential.</li>
+                <li>Historical v0.7.0 migration design: <a href="designs/v070-sovereign-mobility-phase1.md">withdrawn design doc</a> (reference only).</li>
             </ul>
         </section>
 
@@ -223,20 +207,21 @@ const proof = await sourceClient.getMigrationProof(storageId);</code></pre>
 
             <h3>Recommended High-Level Abstractions</h3>
             <ul>
-                <li><strong>Automatic payment handling</strong> — A <code>DidBoxClient</code> (or equivalent) that can detect 402 responses, negotiate payment via pluggable L402/x402 providers, and transparently retry the original request.</li>
-                <li><strong>Migration orchestration</strong> — Helpers such as <code>getMigrationProof()</code>, <code>migrate()</code>, and <code>DidBoxClient.forNode()</code> that make Sovereign Mobility straightforward for clients.</li>
+                <li><strong>Automatic payment handling</strong> — A <code>DidBoxClient</code> that detects 402 responses on micropayment nodes, settles only rails listed in <code>supported_rails</code>, and retries the original request.</li>
+                <li><strong>Entitlement credential injection</strong> — Per-node <code>entitlementKey</code> (separate from agent DID keys), including <code>destinationEntitlementKey</code> for <code>migrate()</code>.</li>
+                <li><strong>Cross-node helpers</strong> — <code>migrate()</code> and <code>DidBoxClient.forNode()</code> wrapping client-only retrieve + store.</li>
                 <li><strong>Lease lifecycle support</strong> — Cost estimation using <code>/price</code>, expiry monitoring, and assisted lease extension.</li>
                 <li><strong>Resilience patterns</strong> — Built-in support for client-side mirroring of important conversations/threads into per-DID archive inboxes, plus reconciliation helpers (see the Deletion Semantics design document).</li>
                 <li><strong>Group communication helpers</strong> — Ergonomic APIs for the per-DID signing + shared symmetric encryption pattern without forcing application code to manage the details.</li>
                 <li><strong>Paid content distribution support</strong> — Helpers for creators and platforms using the off-protocol payment model (see the Paid Content Distribution design pattern), including lease management, key handling coordination, and private delivery flows.</li>
-                <li><strong>Discovery and configuration</strong> — Automatic fetching and caching of <code>/.well-known/didbox-configuration</code>, with exposure of supported rails, limits, and node identity.</li>
+                <li><strong>Discovery and configuration</strong> — Fetch and cache <code>/.well-known/didbox-configuration</code> per node URL; expose <code>billing_mode</code>, rails, and limits; provide cache invalidation (<code>clearDiscoveryCache()</code>).</li>
                 <li><strong>Clock and error recovery</strong> — Automatic use of server <code>Date</code> headers for drift correction and clear error types for common failure modes (drift, replay, payment required, etc.).</li>
             </ul>
 
             <h3>Reference Packages</h3>
             <p>The official packages aim to implement the above:</p>
             <ul>
-                <li><code>@didbox/sdk-crypto</code> — Low-level Ed25519 signing, request binding, migration proof verification.</li>
+                <li><code>@didbox/sdk-crypto</code> — Low-level Ed25519 signing and request binding.</li>
                 <li><code>@didbox/sdk-payments</code> — Rail negotiation and proof handling.</li>
                 <li><code>@didbox/sdk-core</code> — High-level <code>DidBoxClient</code> that combines the above with convenient methods.</li>
             </ul>
@@ -244,32 +229,10 @@ const proof = await sourceClient.getMigrationProof(storageId);</code></pre>
             <p>Application authors and agent frameworks are strongly encouraged to build on these packages rather than re-implementing protocol details.</p>
         </section>
 
-        <section id="server-migration">
-            <h2>10. Server Implementation Requirements (v0.7.0+)</h2>
-            
-            <h3>Supporting Sovereign Mobility</h3>
-            <p>To be compliant with v0.7.0, your node <strong>MUST</strong> implement <code>POST /migrate/{id}/authorize</code>.</p>
-            
-            <h4>Core Requirements</h4>
-            <ul>
-                <li>Require valid DID authentication (the caller must be the owner of the storage object).</li>
-                <li>Return 404 for unknown storage IDs, 403 for non-owners, 410 for expired leases.</li>
-                <li>Compute <code>ciphertext_hash</code> (sha256:) of the current blob.</li>
-                <li>Calculate <code>remaining_lease_hours</code> as <code>max(1, ceil(remaining time in hours))</code>.</li>
-                <li>Sign the authorization using <strong>JCS canonicalization (RFC 8785)</strong> + your node's dedicated Ed25519 key.</li>
-                <li>Publish your node identity in <code>/.well-known/didbox-configuration</code> (see below).</li>
-            </ul>
+        <section id="server-config">
+            <h2>10. Server Configuration (v0.9.1)</h2>
 
-            <h3>Node Identity Configuration (Mandatory)</h3>
-            <p>Every production node in v0.7.0 <strong>MUST</strong> be configured with a dedicated Ed25519 keypair for signing Migration Authorizations.</p>
-            
-            <pre><code># wrangler.toml or environment
-NODE_DID="did:key:z6MkYourNodeIdentity..."
-NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
-
-            <p>The corresponding public key will be automatically derived and published in discovery.</p>
-
-            <h3>Important Environment Variables (v0.7.0)</h3>
+            <h3>Important Environment Variables</h3>
             <table class="error-table">
                 <tr>
                     <th>Variable</th>
@@ -282,14 +245,14 @@ NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
                     <td>High-entropy secret for DID hashing (≥128 bits)</td>
                 </tr>
                 <tr>
-                    <td><code>NODE_DID</code></td>
-                    <td>Yes (v0.7.0+)</td>
-                    <td>Node's did:key identity (Ed25519)</td>
+                    <td><code>BILLING_MODE</code></td>
+                    <td>No</td>
+                    <td><code>micropayment</code> (default) or <code>entitlement</code></td>
                 </tr>
                 <tr>
-                    <td><code>NODE_SIGNING_PRIVATE_KEY</code></td>
-                    <td>Yes (v0.7.0+)</td>
-                    <td>32-byte hex Ed25519 private key for Migration Proofs</td>
+                    <td><code>ENTITLEMENT_KEY_HASHES</code></td>
+                    <td>Yes (entitlement prod)</td>
+                    <td>Comma-separated <code>id:sha256hex</code> of API key secrets</td>
                 </tr>
                 <tr>
                     <td><code>ALBY_API_KEY</code></td>
@@ -309,24 +272,32 @@ NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
                 <tr>
                     <td><code>DEV_MODE</code></td>
                     <td>Optional</td>
-                    <td>Set to "true" to bypass real payment verification and node identity (never in production)</td>
+                    <td>Bypasses real payment verification in dev only — never in production</td>
                 </tr>
             </table>
+
+            <h3>Entitlement Operator Runbook</h3>
+            <ol>
+                <li>Set <code>BILLING_MODE=entitlement</code> and configure at least one <code>ENTITLEMENT_KEY_HASHES</code> entry before serving billable traffic.</li>
+                <li>Generate secrets with ≥128 bits of entropy; issue <code>dbx_ent_&lt;id&gt;.&lt;secret&gt;</code> to operators/agents out-of-band.</li>
+                <li>Compare hashes in constant time; never log the entitlement header or secret substrings.</li>
+                <li>Rotate by provisioning a new <code>&lt;id&gt;</code>, distributing the new key, then revoking the old hash. Overlap windows are RECOMMENDED.</li>
+                <li>Enforce org quotas out-of-band (ingress limits, disk caps, WAF) until Phase 2 protocol quotas.</li>
+            </ol>
+            <p>See <code>packages/server/wrangler.entitlement.prod.example.toml</code> for a production template.</p>
         </section>
 
         <section id="commercial-operators">
-            <h2>11. Guidance for Commercial & Fleet Operators (v0.7.0+)</h2>
+            <h2>11. Guidance for Commercial & Fleet Operators (v0.9.1)</h2>
+
+            <h3>Dual-Mode Fleets</h3>
+            <p>Operators may run <strong>both</strong> micropayment (public) and entitlement (internal) nodes. Clients branch per-node from discovery — no single global billing mode. Micropayment and entitlement nodes MUST NOT share payment bypass semantics (entitlement headers do not satisfy 402 on micropayment nodes).</p>
 
             <h3>Partial Rail Support</h3>
-            <p>Commercial nodes may advertise only a subset of rails (e.g., <code>["x402"]</code>). This is fully compliant. Ensure your discovery response and conformance testing scope reflect only the rails you actually support.</p>
+            <p>Micropayment nodes may advertise only a subset of rails (e.g., <code>["x402"]</code>). This is fully compliant. Run conformance with the <code>micropayment</code> profile scoped to advertised rails.</p>
 
-            <h3>Node Identity for Multi-Node Fleets</h3>
-            <p>For high-availability or multi-region deployments, you have two compliant options:</p>
-            <ul>
-                <li><strong>Shared signing key:</strong> Use the same Ed25519 key across all nodes in your fleet. This allows any node to issue verifiable Migration Proofs for leases stored anywhere in the fleet.</li>
-                <li><strong>Per-node keys:</strong> Each node uses its own identity. Clients will rely on the <code>source_node</code> field in Migration Proofs.</li>
-            </ul>
-            <p>Shared keys are often simpler for Phase 1 Sovereign Mobility.</p>
+            <h3>Entitlement Fleet Consistency</h3>
+            <p>All replicas in an entitlement fleet MUST share identical <code>ENTITLEMENT_KEY_HASHES</code> configuration. Use overlapping key ids during rotation for zero-downtime deploys.</p>
 
             <h3>SERVICE_SALT Considerations</h3>
             <p>The <code>SERVICE_SALT</code> is effectively immutable. Rotating it will break all existing inbox and lease lookups. Treat it as a long-lived secret with the same protection level as your node signing key. Future protocol versions may introduce rotation support.</p>
@@ -388,13 +359,12 @@ NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
             </ul>
             <p>Monitor table size and cleanup lag in production. D1 has practical limits; very high-volume nodes may eventually need sharding or a separate ledger for payment proofs.</p>
 
-            <h3>Node Signing Key Management</h3>
-            <p>The Ed25519 key published in <code>node_identity</code> (used to sign Migration Authorizations) should be treated with high security — equivalent to a payment provider secret.</p>
+            <h3>Entitlement Key Management</h3>
+            <p>Treat entitlement secrets with the same care as payment provider credentials.</p>
             <ul>
-                <li>Store it in an appropriate secret manager (not in source control or plain environment variables in production).</li>
-                <li>Rotation is allowed: publish a new <code>node_identity</code> in discovery. Previously issued proofs remain valid until their natural <code>expires_at</code>.</li>
-                <li>For fleets: sharing one key across nodes simplifies Migration Proof verification for clients. Using per-node keys is also compliant but requires clients to track <code>source_node</code>.</li>
-                <li>Never use the same key for both node identity / migration proofs and day-to-day admin operations if you can avoid it.</li>
+                <li>Store hashes in secret managers or Wrangler secrets — not in source control.</li>
+                <li>Never log <code>X-DIDBOX-Entitlement</code> or any substring of <code>&lt;secret&gt;</code>.</li>
+                <li>Phase 1 keys are org-wide bearer tokens; restrict distribution and rotate on compromise.</li>
             </ul>
         </section>
 
@@ -422,6 +392,16 @@ NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
                     <td>Generate a fresh timestamp and signature for every new request.</td>
                 </tr>
                 <tr>
+                    <td><code>403: ENTITLEMENT_REQUIRED</code></td>
+                    <td>Missing or invalid org API key on an entitlement node.</td>
+                    <td>Attach valid <code>X-DIDBOX-Entitlement</code>; do not treat as a 402 payment challenge.</td>
+                </tr>
+                <tr>
+                    <td><code>403: ACCESS_DENIED</code></td>
+                    <td>Authenticated DID lacks permission for the resource (e.g. retrieve ACL).</td>
+                    <td>Use the owner/recipient DID or correct <code>X-Inbox-Alias</code>.</td>
+                </tr>
+                <tr>
                     <td><code>413: Payload too large</code></td>
                     <td>Sent > 10MB ciphertext.</td>
                     <td>Chunk large data or use a node with higher limits.</td>
@@ -431,12 +411,28 @@ NODE_SIGNING_PRIVATE_KEY="32-byte hex private key (64 hex chars)"</code></pre>
 
         <section id="conformance">
             <h2>8. Conformance & Testing</h2>
-            <p>Use the <code>@didbox/conformance</code> suite to validate your implementation. Your node must pass the following scenarios:</p>
-            <ul>
-                <li><strong>Auth:</strong> Replay rejection, drift window enforcement, malformed DID rejection.</li>
-                <li><strong>Privacy:</strong> Proof of salted hashing (no raw DIDs in DB).</li>
-                <li><strong>Economics:</strong> Correct 402 response code and amount calculation.</li>
-            </ul>
+            <p>Use the <code>@didbox/conformance</code> suite (v0.9.1) to validate your implementation. Conformance is <strong>profile-based</strong> — see PROTOCOL.md §10.1.</p>
+
+            <h3>Profiles</h3>
+            <table class="error-table">
+                <tr><th>Profile</th><th>When</th><th>Covers</th></tr>
+                <tr><td><code>core</code></td><td>All nodes</td><td>Auth, storage, delete, economics, discovery</td></tr>
+                <tr><td><code>micropayment</code></td><td><code>billing_mode: micropayment</code></td><td>core + L402/x402 + billing-guard</td></tr>
+                <tr><td><code>enterprise-internal</code></td><td><code>billing_mode: entitlement</code></td><td>403 gate, empty rails, entitlement receipts</td></tr>
+                <tr><td><code>all</code></td><td>Reference monorepo CI</td><td>Every profile (requires both node URLs)</td></tr>
+            </table>
+
+            <h3>CLI Examples</h3>
+            <pre><code># Micropayment node (default profile)
+didbox-conformance --url http://localhost:8787 --profile micropayment
+
+# Enterprise-internal node
+didbox-conformance --url http://localhost:8787 \
+  --profile enterprise-internal \
+  --entitlement-url http://localhost:8788
+
+# From monorepo (Vitest)
+npm test</code></pre>
         </section>
     </div>
 </body>

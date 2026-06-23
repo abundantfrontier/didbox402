@@ -1,83 +1,161 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { runConformanceSuite } from './index';
-import { signRequest } from '@didbox/sdk-crypto';
+import { spawnSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import path from 'path';
+
+const PKG_ROOT = path.resolve(__dirname, '..');
+const VERSION: string = JSON.parse(
+  readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')
+).version;
+
+type Profile = 'core' | 'micropayment' | 'enterprise-internal' | 'all';
+
+const PROFILE_FILES: Record<Profile, string[]> = {
+  core: ['auth.test.ts', 'storage.test.ts', 'delete.test.ts', 'economics.test.ts'],
+  micropayment: [
+    'auth.test.ts',
+    'storage.test.ts',
+    'delete.test.ts',
+    'economics.test.ts',
+    'l402.test.ts',
+    'x402.test.ts',
+    'billing-guard.test.ts',
+  ],
+  'enterprise-internal': ['entitlement.test.ts'],
+  all: [
+    'auth.test.ts',
+    'storage.test.ts',
+    'delete.test.ts',
+    'economics.test.ts',
+    'l402.test.ts',
+    'x402.test.ts',
+    'billing-guard.test.ts',
+    'entitlement.test.ts',
+  ],
+};
+
+async function probeDiscovery(url: string) {
+  try {
+    const res = await fetch(`${url}/.well-known/didbox-configuration`);
+    if (!res.ok) return null;
+    return (await res.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function resolveVitestBin(): string {
+  const candidates = [
+    path.join(PKG_ROOT, 'node_modules', 'vitest', 'vitest.mjs'),
+    path.join(PKG_ROOT, '..', '..', 'node_modules', 'vitest', 'vitest.mjs'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  throw new Error('Could not find vitest. Install dependencies from the monorepo root.');
+}
+
+function runVitest(
+  files: string[],
+  env: NodeJS.ProcessEnv,
+  json: boolean
+): number {
+  const testPaths = files.map((file) => path.join('src', 'server', file));
+  const vitestBin = resolveVitestBin();
+  const args = ['run', ...testPaths];
+  if (json) {
+    args.push('--reporter=json');
+  }
+
+  const result = spawnSync(process.execPath, [vitestBin, ...args], {
+    cwd: PKG_ROOT,
+    env: { ...process.env, ...env },
+    stdio: 'inherit',
+  });
+
+  return result.status ?? 1;
+}
 
 const program = new Command();
 
 program
   .name('didbox-conformance')
-  .description('Official Protocol Conformance Suite for didbox402 (v0.8.0)')
-  .version('0.8.0')
-  .requiredOption('-u, --url <url>', 'Base URL of the didbox402 node')
-  .requiredOption('-d, --did <did>', 'Test DID to use for requests')
-  .requiredOption('-k, --key <key>', 'Hex private key for the test DID')
-  .option('-j, --json', 'Output results in JSON format for CI/CD', false)
+  .description(`Official Protocol Conformance Suite for didbox402 (v${VERSION})`)
+  .version(VERSION)
+  .requiredOption('-u, --url <url>', 'Base URL of the didbox402 node (micropayment profile)')
+  .option(
+    '-p, --profile <profile>',
+    'Conformance profile: core | micropayment | enterprise-internal | all',
+    'micropayment'
+  )
+  .option(
+    '--entitlement-url <url>',
+    'Base URL for enterprise-internal profile (default: http://localhost:8788)'
+  )
+  .option(
+    '--entitlement-key <key>',
+    'Entitlement API key for enterprise-internal tests (default: dbx_ent_test.conformance-secret)'
+  )
+  .option('-d, --did <did>', 'Reserved for custom test identity (suite generates its own DID today)')
+  .option('-k, --key <key>', 'Reserved for custom test identity (hex Ed25519 private key)')
+  .option('-j, --json', 'Use Vitest JSON reporter', false)
+  .option('--dry-run', 'Print the selected profile and exit without running tests', false)
   .action(async (options) => {
-    if (!options.json) {
-      console.log(`\n🚀 Starting didbox402 Conformance Tests against: ${options.url}\n`);
-    }
-    
-    const config = {
-      baseUrl: options.url,
-      did: options.did,
-      signRequest: async (data: string) => {
-        // Correctly handle hex private key for Ed25519 signing
-        return signRequest(Buffer.from(options.key, 'hex'), 'POST', '', data, Date.now()); 
-      }
-    };
-
-    try {
-      if (options.json) {
-        // Simulated JSON output for CI/CD
-        console.log(JSON.stringify({
-          status: 'success',
-          timestamp: new Date().toISOString(),
-          target: options.url,
-          results: {
-            auth: 'passed',
-            economics: 'passed',
-            storage: 'passed',
-            l402: 'passed',
-            x402: 'passed'
-          }
-        }, null, 2));
-      } else {
-        console.log('--- didbox402 Conformance Suite ---');
-        console.log(`Target Node: ${options.url}`);
-        console.log(`Test Identity: ${options.did}`);
-        console.log('');
-
-        console.log('Available Test Categories (v0.8.0):');
-        console.log('  - auth        : DID signature validation, replay protection, drift window');
-        console.log('  - economics   : Pricing, 402 challenges, operator min_charge_mb floor');
-        console.log('  - storage     : Basic store/retrieve/ownership flows');
-        console.log('  - delete      : Owner-initiated DELETE /store/{id}');
-        console.log('  - l402        : Lightning (L402) challenge + real Alby provider support');
-        console.log('  - x402        : USDC (x402) challenge + real Base provider support');
-        console.log('');
-        console.log('Real Payment Providers:');
-        console.log('  Set ALBY_API_KEY and/or USDC_RPC_URL to run against live rails.');
-        console.log('');
-
-        console.log('To run the full conformance suite with human-readable output:');
-        console.log('  npx vitest run node_modules/@didbox/conformance/src/server');
-        console.log('');
-
-        console.log('For CI/CD (JSON output):');
-        console.log(`  didbox-conformance --url ${options.url} --did ${options.did} --key <key> --json`);
-        console.log('');
-
-        console.log('✅ Configuration looks valid. Ready to run conformance tests.');
-      }
-    } catch (err: any) {
-      if (options.json) {
-        console.log(JSON.stringify({ status: 'error', error: err.message }));
-      } else {
-        console.error(`\n❌ Conformance check failed: ${err.message}`);
-      }
+    const profile = options.profile as Profile;
+    if (!PROFILE_FILES[profile]) {
+      console.error(`Unknown profile "${options.profile}". Use: core, micropayment, enterprise-internal, all`);
       process.exit(1);
     }
+
+    const env: NodeJS.ProcessEnv = {
+      DIDBOX_URL: options.url.replace(/\/$/, ''),
+    };
+
+    if (profile === 'enterprise-internal' || profile === 'all') {
+      env.DIDBOX_ENTITLEMENT_URL = (options.entitlementUrl || 'http://localhost:8788').replace(/\/$/, '');
+      if (options.entitlementKey) {
+        env.DIDBOX_ENTITLEMENT_KEY = options.entitlementKey;
+      }
+    }
+
+    if (!options.json && !options.dryRun) {
+      console.log(`\n🚀 didbox402 Conformance Suite v${VERSION}`);
+      console.log(`Profile: ${profile}`);
+      console.log(`Target: ${env.DIDBOX_URL}`);
+      if (env.DIDBOX_ENTITLEMENT_URL) {
+        console.log(`Entitlement target: ${env.DIDBOX_ENTITLEMENT_URL}`);
+      }
+      console.log('');
+    }
+
+    const probeUrl =
+      profile === 'enterprise-internal' ? env.DIDBOX_ENTITLEMENT_URL! : env.DIDBOX_URL!;
+
+    if (profile !== 'core') {
+      const discovery = await probeDiscovery(probeUrl);
+      if (!discovery) {
+        console.error(`❌ Could not reach discovery at ${probeUrl}/.well-known/didbox-configuration`);
+        process.exit(1);
+      }
+      if (!options.json && !options.dryRun) {
+        console.log(`Node protocol_version: ${discovery.protocol_version ?? 'unknown'}`);
+        console.log(`Node billing_mode: ${discovery.billing_mode ?? 'micropayment'}`);
+        console.log('');
+      }
+    }
+
+    const files = PROFILE_FILES[profile];
+
+    if (options.dryRun) {
+      console.log(JSON.stringify({ profile, files, env }, null, 2));
+      return;
+    }
+
+    const exitCode = runVitest(files, env, options.json);
+    process.exit(exitCode);
   });
 
 program.parse();

@@ -17,15 +17,31 @@ npm install -g @didbox/conformance
 Run the conformance CLI to verify your node's configuration:
 
 ```bash
-didbox-conformance --url https://your-node.com --did did:key:z6Mk... --key <your-hex-private-key>
+# Micropayment node (default profile)
+didbox-conformance --url https://your-node.com --profile micropayment
+
+# Enterprise-internal node
+didbox-conformance --url https://your-node.com \
+  --profile enterprise-internal \
+  --entitlement-url https://entitlement.your-node.com \
+  --entitlement-key dbx_ent_prod.your-secret
 ```
+
+### Profiles (v0.9.1)
+
+| Profile | Flag | Use when |
+|---------|------|----------|
+| `core` | `--profile core` | Auth, storage, delete, economics only |
+| `micropayment` | `--profile micropayment` (default) | Public nodes with 402 billing |
+| `enterprise-internal` | `--profile enterprise-internal` | `billing_mode: entitlement` nodes |
+| `all` | `--profile all` | Full monorepo validation (both node URLs) |
 
 ## Usage in CI/CD
 
-The CLI supports a `--json` mode for automated integration:
+The CLI runs Vitest and supports JSON reporter output:
 
 ```bash
-didbox-conformance --url $NODE_URL --did $TEST_DID --key $TEST_KEY --json
+didbox-conformance --url $NODE_URL --profile micropayment --json
 ```
 
 ## Manual Testing Configuration
@@ -85,10 +101,8 @@ Example environment for running conformance against a production-like node:
 
 ```bash
 export DIDBOX_URL=https://your-node.com
-export TEST_DID=did:key:z6Mk...
-export TEST_KEY=your_private_key_hex
 
-didbox-conformance --url $DIDBOX_URL --did $TEST_DID --key $TEST_KEY
+didbox-conformance --url $DIDBOX_URL --profile micropayment
 ```
 
 **Note:** When testing against a node with real providers, you must use a DID that the node will accept for storage operations, and the node must have the corresponding payment provider keys configured.

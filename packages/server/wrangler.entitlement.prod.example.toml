@@ -1,0 +1,42 @@
+# Production example — entitlement billing (v0.9.1)
+# Copy to wrangler.entitlement.toml (or your deploy config) and fill in secrets.
+# Deploy: wrangler deploy --config wrangler.entitlement.toml
+#
+# Generate a key:
+#   SECRET=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
+#   ID="prod-$(date +%Y%m)"
+#   HASH=$(printf '%s' "$SECRET" | shasum -a 256 | awk '{print $1}')
+#   echo "Issue to operators: dbx_ent_${ID}.${SECRET}"
+#   echo "ENTITLEMENT_KEY_HASHES=\"${ID}:${HASH}\""
+
+name = "didbox402-entitlement"
+main = "src/index.ts"
+compatibility_date = "2024-05-11"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+# Never enable in production
+# DEV_MODE = "true"
+
+# REQUIRED: ≥128-bit cryptographically random salt (see PROTOCOL.md §10.2)
+SERVICE_SALT = "REPLACE_WITH_HIGH_ENTROPY_SECRET"
+
+BASE_RATE_PER_MB_HOUR = "100"
+INBOX_CREATION_FEE = "1000"
+BILLING_MODE = "entitlement"
+
+# REQUIRED: id:sha256hex pairs (comma-separated). Store only hashes — never raw secrets.
+# Multiple ids support zero-downtime rotation.
+ENTITLEMENT_KEY_HASHES = "prod-202606:REPLACE_WITH_SHA256_HEX_OF_SECRET"
+
+# Optional: protect janitor/admin endpoints
+# ADMIN_TOKEN = "REPLACE_WITH_HIGH_ENTROPY_SECRET"
+
+[[r2_buckets]]
+binding = "STORAGE_BUCKET"
+bucket_name = "didbox402-storage-entitlement-prod"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "didbox402-db-entitlement-prod"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
